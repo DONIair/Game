@@ -323,15 +323,17 @@
 						const slot=players.size+1,spawn=gridPosition(slot),startState={...spawn,heading:trackAngleAt(0)-Math.PI,speed:0,lap:1,progress:trackProjection(spawn.x,spawn.z).sample.t/TAU};
 						players.set(connection.peer,{id:connection.peer,name,snapshot:startState});
 						connections.set(connection.peer,connection);
+						renderPlayers(currentPlayers());
 						connection.send({type:'welcome',playerId:connection.peer,running:raceActive,spawn:startState,startAt:raceStartAt,laps:targetLaps,players:currentPlayers()});
 						updateRoster(currentPlayers());setStatus(`${name} ist beigetreten.`);
 					}else if(message.type==='input'&&players.has(connection.peer)&&validSnapshot({...message,id:connection.peer,name:'Racer',lap:message.lap})){
 						const player=players.get(connection.peer);
 						player.snapshot={x:message.x,z:message.z,heading:message.heading,speed:message.speed,lap:message.lap,progress:message.progress};
+						renderPlayers(currentPlayers());
 						broadcastState();
 					}
 				});
-				connection.on('close',()=>{players.delete(connection.peer);connections.delete(connection.peer);updateRoster(currentPlayers())});
+				connection.on('close',()=>{players.delete(connection.peer);connections.delete(connection.peer);renderPlayers(currentPlayers())});
 				connection.on('error',reportPeerError);
 			});
 			networkTimer=setInterval(broadcastState,50);
