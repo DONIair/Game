@@ -5,23 +5,53 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 	<title>APEX — Racing</title>
 	<style>
-		*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101912;color:#fff;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}canvas{display:block}#hud{position:fixed;inset:0;pointer-events:none}.top{position:absolute;top:24px;left:28px;display:flex;align-items:center;gap:12px}.brand{font-size:13px;font-weight:900;letter-spacing:.24em}.brand em{color:#d7ff32;font-style:normal}.pill{border:1px solid #ffffff35;background:#08110bcc;border-radius:20px;padding:7px 12px;color:#c9d2c8;font-size:10px;letter-spacing:.12em}.stats{position:absolute;top:22px;right:26px;display:flex;gap:9px}.card{min-width:94px;padding:11px 15px;border:1px solid #ffffff28;background:#08110bcc;border-radius:8px}.label{font-size:9px;letter-spacing:.17em;color:#95a294}.value{margin-top:3px;font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}.unit{font-size:10px;color:#aab5a8}.bottom{position:absolute;left:28px;bottom:24px;display:flex;align-items:end;gap:22px}.controls{font-size:10px;color:#d0d6cf;letter-spacing:.08em;line-height:1.9;text-shadow:0 2px 6px #000}.key{display:inline-block;min-width:22px;text-align:center;padding:1px 5px;border:1px solid #ffffff55;border-radius:4px;background:#08110bcc;color:white;font-size:9px}.message{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;text-shadow:0 3px 14px #000}.message h1{font-size:clamp(34px,6vw,72px);line-height:.95;margin:0 0 12px;font-style:italic;letter-spacing:-.06em}.message p{font-size:11px;letter-spacing:.25em;color:#e4ff64}.message small{color:#ffffffad;letter-spacing:.1em}.hide{display:none}.footer{position:absolute;right:26px;bottom:24px;color:#ffffff9a;font-size:9px;letter-spacing:.12em}.green{color:#d7ff32}
+		*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101912;color:#fff;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}canvas{display:block}#hud{position:fixed;inset:0;z-index:2;pointer-events:none}.top{position:absolute;top:24px;left:28px;display:flex;align-items:center;gap:12px}.brand{font-size:13px;font-weight:900;letter-spacing:.24em}.brand em{color:#d7ff32;font-style:normal}.pill{border:1px solid #ffffff35;background:#08110bcc;border-radius:20px;padding:7px 12px;color:#c9d2c8;font-size:10px;letter-spacing:.12em}.stats{position:absolute;top:22px;right:26px;display:flex;gap:9px}.card{min-width:94px;padding:11px 15px;border:1px solid #ffffff28;background:#08110bcc;border-radius:8px}.label{font-size:9px;letter-spacing:.17em;color:#95a294}.value{margin-top:3px;font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}.unit{font-size:10px;color:#aab5a8}.bottom{position:absolute;left:28px;bottom:24px;display:flex;align-items:end;gap:22px}.controls{font-size:10px;color:#d0d6cf;letter-spacing:.08em;line-height:1.9;text-shadow:0 2px 6px #000}.key{display:inline-block;min-width:22px;text-align:center;padding:1px 5px;border:1px solid #ffffff55;border-radius:4px;background:#08110bcc;color:white;font-size:9px}.message{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;text-shadow:0 3px 14px #000}.message h1{font-size:clamp(34px,6vw,72px);line-height:.95;margin:0 0 12px;font-style:italic;letter-spacing:-.06em}.message p{font-size:11px;letter-spacing:.25em;color:#e4ff64}.message small{color:#ffffffad;letter-spacing:.1em}.hide{display:none!important}.footer{position:absolute;right:26px;bottom:24px;color:#ffffff9a;font-size:9px;letter-spacing:.12em}.green{color:#d7ff32}
+		.lobby{position:fixed;inset:0;z-index:5;display:grid;place-items:center;padding:20px;background:linear-gradient(110deg,#08100bd9,#08100b70 58%,#08100b99);pointer-events:auto}.panel{width:min(440px,100%);padding:30px;border:1px solid #ffffff30;border-radius:16px;background:#101a16ed;box-shadow:0 24px 80px #0009;backdrop-filter:blur(16px)}.eyebrow{color:#d7ff32;font-size:10px;font-weight:800;letter-spacing:.22em}.panel h1{margin:10px 0 6px;font-size:clamp(36px,8vw,56px);font-style:italic;letter-spacing:-.07em;line-height:.95}.panel p{color:#b4c0b5;font-size:13px;line-height:1.6}.field-label{display:block;margin:20px 0 7px;color:#aab6ab;font-size:10px;letter-spacing:.12em}.field,.button{width:100%;min-height:44px;padding:0 13px;border:1px solid #ffffff30;border-radius:7px;background:#07100c;color:white;font:inherit}.field:focus{outline:2px solid #d7ff32}.button{border:0;background:#d7ff32;color:#17200d;font-weight:800;cursor:pointer}.button:hover{background:#e5ff78}.button.secondary{border:1px solid #ffffff35;background:#ffffff0b;color:white}.button:disabled{opacity:.5;cursor:wait}.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}.join-row{display:flex;gap:8px}.join-row .field{min-width:0;text-transform:uppercase;letter-spacing:.15em}.join-row .button{width:auto;padding:0 18px}.room-card{margin-top:20px;padding:14px;border:1px solid #ffffff20;border-radius:9px;background:#ffffff08}.room-code{margin:3px 0 7px;color:#d7ff32;font-size:30px;font-weight:900;letter-spacing:.2em}.room-note,.status{color:#aab6ab;font-size:11px;line-height:1.5}.status{min-height:18px;margin-top:14px}.roster{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}.driver{padding:6px 9px;border:1px solid #ffffff25;border-radius:20px;color:#e8eee8;font-size:11px}.host-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.lobby a{color:#d7ff32}.remote-name{position:absolute;left:50%;top:-20px;transform:translateX(-50%);padding:3px 6px;border-radius:3px;background:#07100cbf;color:white;font:10px system-ui;white-space:nowrap;pointer-events:none}@media(max-width:600px){.top{top:14px;left:14px}.stats{top:58px;right:12px;gap:5px}.card{min-width:72px;padding:8px}.value{font-size:16px}.bottom{left:14px;bottom:14px}.footer{right:14px;bottom:18px;font-size:8px}.panel{padding:23px}.actions{grid-template-columns:1fr}.lobby{padding:14px}}
 	</style>
 </head>
 <body>
 	<div id="hud">
-		<div class="top"><div class="brand">APEX <em>RACING</em></div><div class="pill">CIRCUIT · FREE DRIVE</div></div>
+		<div class="top"><div class="brand">APEX <em>RACING</em></div><div class="pill" id="room-badge">MULTIPLAYER · READY</div></div>
 		<div class="stats">
 			<div class="card"><div class="label">GESCHWINDIGKEIT</div><div class="value"><span id="speed">000</span> <span class="unit">KM/H</span></div></div>
 			<div class="card"><div class="label">RUNDE</div><div class="value" id="lap">01</div></div>
 			<div class="card"><div class="label">ZEIT</div><div class="value" id="timer">00:00.0</div></div>
 		</div>
-		<div class="message" id="intro"><h1>OWN THE<br><span class="green">APEX.</span></h1><p>DEIN RENNEN. DEINE LINIE.</p><small>W / ↑ BESCHLEUNIGEN &nbsp; · &nbsp; A / D LENKEN &nbsp; · &nbsp; SPACE BREMSE</small></div>
-		<div class="bottom"><div class="controls"><span class="key">W</span> / <span class="key">↑</span> GAS &nbsp; <span class="key">S</span> BREMSE<br><span class="key">A</span> <span class="key">D</span> LENKEN &nbsp; <span class="key">R</span> ZURÜCKSETZEN</div></div>
+		<div class="message hide" id="intro"><h1>OWN THE<br><span class="green">APEX.</span></h1><p>DEIN RENNEN. DEINE LINIE.</p><small>PFEILTASTEN: LENKEN &nbsp; · &nbsp; ↑ GAS &nbsp; · &nbsp; ↓ BREMSE</small></div>
+		<div class="bottom"><div class="controls"><span class="key">↑</span> GAS &nbsp; <span class="key">↓</span> BREMSE<br><span class="key">←</span> <span class="key">→</span> LENKEN &nbsp; <span class="key">R</span> ZURÜCKSETZEN</div></div>
 		<div class="footer">THREE-DIMENSIONAL CIRCUIT <span class="green">//</span> 01</div>
 	</div>
+	<section class="lobby" id="lobby">
+		<div class="panel">
+			<div class="eyebrow">APEX RACING · ONLINE</div>
+			<h1>FAHR MIT.</h1>
+			<p>Erstelle einen Rennraum oder tritt mit einem Code bei. Alle im Raum fahren auf derselben Strecke.</p>
+			<label class="field-label" for="player-name">DEIN NAME</label>
+			<input class="field" id="player-name" maxlength="16" placeholder="Racer" autocomplete="nickname">
+			<div id="setup-actions">
+				<div class="actions">
+					<button class="button" id="create-room">RAUM ERSTELLEN</button>
+					<button class="button secondary" id="solo-race">ALLEIN FAHREN</button>
+				</div>
+				<label class="field-label" for="room-input">RAUMCODE</label>
+				<div class="join-row"><input class="field" id="room-input" maxlength="6" placeholder="ABC123" autocomplete="off"><button class="button" id="join-room">BEITRETEN</button></div>
+			</div>
+			<div class="room-card hide" id="room-card">
+				<div class="eyebrow" id="room-title">DEIN RENNRAUM</div>
+				<div class="room-code" id="room-code"></div>
+				<div class="room-note">Teile diesen Code mit deinen Mitfahrern.</div>
+				<div class="roster" id="roster"></div>
+				<div class="host-actions">
+					<button class="button" id="start-race">RENNEN STARTEN</button>
+					<button class="button secondary" id="leave-room">VERLASSEN</button>
+				</div>
+			</div>
+			<div class="status" id="connection-status" role="status" aria-live="polite">Pfeiltasten zum Lenken · ↑ Gas · ↓ Bremse</div>
+		</div>
+	</section>
 	<script type="module">
 		import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+		import Peer from 'https://esm.sh/peerjs@1.5.4?bundle';
 
 		const scene = new THREE.Scene();
 		scene.background = new THREE.Color(0x9ab8c5);
@@ -141,34 +171,169 @@
 		const wing=new THREE.Mesh(new THREE.BoxGeometry(1.65,.12,.43),paint);wing.position.set(0,1.57,1.79);car.add(wing);
 		const diffuser=new THREE.Mesh(new THREE.BoxGeometry(1.42,.19,.28),dark);diffuser.position.set(0,.36,2.19);car.add(diffuser);
 
-		const state={x:A,y:0,z:0,heading:Math.PI/2,speed:0,lap:1,elapsed:0,started:false,lastT:0};
-		// Place the car on the start straight, facing down the circuit.
-		state.x=A;state.z=-4;state.heading=Math.PI/2;
+		const state={x:A,y:0,z:-4,heading:Math.PI/2,speed:0,lap:1,elapsed:0,lastT:0};
 		const keys={};
-		addEventListener('keydown',e=>{keys[e.code]=true;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();if(e.code==='KeyR')reset()},{passive:false});
-		addEventListener('keyup',e=>keys[e.code]=false);
 		const speedEl=document.getElementById('speed'),timerEl=document.getElementById('timer'),lapEl=document.getElementById('lap'),intro=document.getElementById('intro');
-		function reset(){state.x=A;state.z=-4;state.heading=Math.PI/2;state.speed=0;state.elapsed=0;state.lap=1;state.lastT=0;state.started=false;intro.classList.remove('hide')}
+		const lobby=document.getElementById('lobby'),statusEl=document.getElementById('connection-status'),roomCard=document.getElementById('room-card'),setupActions=document.getElementById('setup-actions');
+		const roomCodeEl=document.getElementById('room-code'),rosterEl=document.getElementById('roster'),roomBadge=document.getElementById('room-badge'),startButton=document.getElementById('start-race');
+		const peerColors=[0x35d7b1,0x5388ff,0xffbd3d,0xc96bff,0xededed,0xff6d55,0x62d95b];
+		const connections=new Map(),players=new Map(),remoteCars=new Map();
+		let peer=null,hostConnection=null,roomRole=null,roomCode='',playerId='host',raceActive=false,networkTimer=0,spawnPosition={x:A,z:-4};
+		const localName=()=>document.getElementById('player-name').value.trim().slice(0,16)||'Racer';
+		const setStatus=message=>{statusEl.textContent=message};
+		const randomCode=()=>Math.random().toString(36).slice(2,8).toUpperCase().padEnd(6,'0');
+		const playerColor=id=>peerColors[[...String(id)].reduce((sum,char)=>sum+char.charCodeAt(0),0)%peerColors.length];
+		function ownSnapshot(){return{id:playerId,name:localName(),color:0xc32d25,x:state.x,z:state.z,heading:state.heading,speed:state.speed,lap:state.lap}}
+		function validSnapshot(player){return player&&typeof player.id==='string'&&typeof player.name==='string'&&[player.x,player.z,player.heading,player.speed,player.lap].every(Number.isFinite)}
+		function updateRoster(list){
+			rosterEl.replaceChildren();
+			for(const entry of list){
+				const chip=document.createElement('span');chip.className='driver';chip.textContent=entry.name+(entry.id===playerId?' (du)':'');rosterEl.append(chip);
+			}
+		}
+		function createRemoteCar(snapshot){
+			const model=car.clone(true),bodyPaint=paint.clone();bodyPaint.color.setHex(snapshot.color||playerColor(snapshot.id));
+			model.traverse(node=>{if(node.isMesh){node.castShadow=true;if(node.material===paint)node.material=bodyPaint}});
+			const labelCanvas=document.createElement('canvas');labelCanvas.width=256;labelCanvas.height=48;
+			const context=labelCanvas.getContext('2d');context.fillStyle='#07100cdd';context.fillRect(0,0,256,48);context.fillStyle='#ffffff';context.font='bold 25px system-ui';context.textAlign='center';context.fillText(snapshot.name.slice(0,16),128,33);
+			const labelTexture=new THREE.CanvasTexture(labelCanvas),labelMaterial=new THREE.SpriteMaterial({map:labelTexture,transparent:true,depthTest:false});
+			const label=new THREE.Sprite(labelMaterial);
+			label.position.y=3.1;label.scale.set(4.2,.7,1);model.add(label);scene.add(model);
+			return{model,target:new THREE.Vector3(snapshot.x,.02,snapshot.z),heading:snapshot.heading,name:snapshot.name,bodyPaint,labelTexture,labelMaterial};
+		}
+		function renderPlayers(list){
+			const visible=new Set();
+			for(const snapshot of list){
+				if(!validSnapshot(snapshot)||snapshot.id===playerId)continue;
+				visible.add(snapshot.id);
+				let remote=remoteCars.get(snapshot.id);
+				if(!remote){remote=createRemoteCar(snapshot);remoteCars.set(snapshot.id,remote)}
+				remote.target.set(snapshot.x,.02,snapshot.z);remote.heading=snapshot.heading;remote.name=snapshot.name;
+			}
+			for(const[id,remote]of remoteCars){if(!visible.has(id)){disposeRemoteCar(remote);remoteCars.delete(id)}}
+			updateRoster(list);
+		}
+		function currentPlayers(){return[ownSnapshot(),...Array.from(players.values(),player=>({...player.snapshot,id:player.id,name:player.name,color:playerColor(player.id)}))]}
+		function sendToRoom(message){for(const connection of connections.values()){if(connection.open)connection.send(message)}}
+		function broadcastState(){sendToRoom({type:'state',players:currentPlayers()})}
+		function disposeRemoteCar(remote){scene.remove(remote.model);remote.bodyPaint.dispose();remote.labelTexture.dispose();remote.labelMaterial.dispose()}
+		function setRoomScreen(code,title){
+			setupActions.classList.add('hide');roomCard.classList.remove('hide');roomCodeEl.textContent=code;document.getElementById('room-title').textContent=title;
+			lobby.classList.remove('hide');
+		}
+		function beginRace(){
+			raceActive=true;state.elapsed=0;state.lastT=(Math.atan2(state.z/B,state.x/A)+Math.PI*2)%(Math.PI*2);
+			lobby.classList.add('hide');intro.classList.add('hide');
+		}
+		function removeRemoteCars(){
+			for(const remote of remoteCars.values())disposeRemoteCar(remote);
+			remoteCars.clear();players.clear();
+		}
+		function leaveRoom(){
+			clearInterval(networkTimer);networkTimer=0;
+			if(hostConnection){hostConnection.close();hostConnection=null}
+			for(const connection of connections.values())connection.close();
+			connections.clear();removeRemoteCars();
+			if(peer){peer.destroy();peer=null}
+			roomRole=null;roomCode='';playerId='host';raceActive=false;spawnPosition={x:A,z:-4};state.x=A;state.z=-4;state.heading=Math.PI/2;state.speed=0;state.elapsed=0;state.lap=1;lapEl.textContent='01';
+			setupActions.classList.remove('hide');roomCard.classList.add('hide');roomBadge.textContent='MULTIPLAYER · READY';startButton.disabled=false;lobby.classList.remove('hide');intro.classList.add('hide');
+			setStatus('Pfeiltasten zum Lenken · ↑ Gas · ↓ Bremse');
+		}
+		function reportPeerError(error){
+			const message=error?.type==='unavailable-id'?'Dieser Raumcode ist bereits vergeben. Erstelle einen neuen Raum.':error?.type==='peer-unavailable'?'Raum nicht gefunden. Prüfe den Code und versuche es erneut.':'Verbindung fehlgeschlagen: '+(error?.type||'unbekannter Fehler');
+			setStatus(message);
+		}
+		function createRoom(){
+			if(peer)return;
+			roomRole='host';roomCode=randomCode();playerId='host';
+			setRoomScreen(roomCode,'DEIN RENNRAUM');roomBadge.textContent='RAUM '+roomCode;startButton.disabled=true;updateRoster([ownSnapshot()]);
+			setStatus('Verbinde mit dem Multiplayer-Dienst …');
+			try{peer=new Peer('apex-'+roomCode,{debug:1})}catch(error){peer=null;roomRole=null;setStatus('Multiplayer konnte nicht gestartet werden: '+(error instanceof Error?error.message:'unbekannter Fehler'));return}
+			peer.on('open',()=>{startButton.disabled=false;setStatus('Raum bereit. Teile den Code und starte, wenn alle da sind.')});
+			peer.on('error',reportPeerError);
+			peer.on('disconnected',()=>setStatus('Verbindung zum Multiplayer-Dienst unterbrochen.'));
+			peer.on('connection',connection=>{
+				connection.on('data',message=>{
+					if(!message||typeof message!=='object')return;
+					if(message.type==='join'&&typeof message.name==='string'){
+						if(!players.has(connection.peer)&&players.size>=7){connection.send({type:'full'});connection.close();return}
+						const name=message.name.trim().slice(0,16)||'Racer';
+						const slot=players.size+1,lane=slot%2===1?-3.2:3.2,row=Math.floor((slot-1)/2);
+						const startState={x:A+lane,z:-4+row*4.2,heading:Math.PI/2,speed:0,lap:1};
+						players.set(connection.peer,{id:connection.peer,name,snapshot:startState});
+						connections.set(connection.peer,connection);
+						connection.send({type:'welcome',playerId:connection.peer,running:raceActive,spawn:startState,players:currentPlayers()});
+						updateRoster(currentPlayers());setStatus(`${name} ist beigetreten.`);
+						if(raceActive)connection.send({type:'start'});
+					}else if(message.type==='input'&&players.has(connection.peer)&&validSnapshot({...message,id:connection.peer,name:'Racer',lap:message.lap})){
+						const player=players.get(connection.peer);
+						player.snapshot={x:message.x,z:message.z,heading:message.heading,speed:message.speed,lap:message.lap};
+						broadcastState();
+					}
+				});
+				connection.on('close',()=>{players.delete(connection.peer);connections.delete(connection.peer);updateRoster(currentPlayers())});
+				connection.on('error',reportPeerError);
+			});
+			networkTimer=setInterval(broadcastState,50);
+		}
+		function joinRoom(){
+			if(peer)return;
+			const code=document.getElementById('room-input').value.trim().toUpperCase();
+			if(!/^[A-Z0-9]{6}$/.test(code)){setStatus('Bitte gib einen sechsstelligen Raumcode ein.');return}
+			roomRole='guest';roomCode=code;setRoomScreen(code,'RENNRAUM');roomBadge.textContent='RAUM '+code;
+			document.getElementById('start-race').classList.add('hide');setStatus('Suche Rennraum …');
+			try{peer=new Peer({debug:1})}catch(error){peer=null;roomRole=null;setStatus('Multiplayer konnte nicht gestartet werden: '+(error instanceof Error?error.message:'unbekannter Fehler'));return}
+			peer.on('error',reportPeerError);
+			peer.on('open',()=>{hostConnection=peer.connect('apex-'+code,{reliable:true});
+				hostConnection.on('open',()=>hostConnection.send({type:'join',name:localName()}));
+				hostConnection.on('data',message=>{
+					if(!message||typeof message!=='object')return;
+					if(message.type==='full'){setStatus('Dieser Rennraum ist voll (maximal 8 Fahrer).');return}
+					if(message.type==='welcome'){
+						playerId=message.playerId;
+						if(message.spawn&&Number.isFinite(message.spawn.x)&&Number.isFinite(message.spawn.z)){spawnPosition={x:message.spawn.x,z:message.spawn.z};state.x=spawnPosition.x;state.z=spawnPosition.z}
+						setStatus(message.running?'Rennen läuft – viel Erfolg!':'Verbunden. Warte auf den Rennstart.');
+						renderPlayers(message.players||[]);if(message.running)beginRace();
+						networkTimer=setInterval(()=>{if(hostConnection?.open)hostConnection.send({type:'input',...ownSnapshot()})},50);
+					}else if(message.type==='state'&&Array.isArray(message.players))renderPlayers(message.players);
+					else if(message.type==='start')beginRace();
+				});
+				hostConnection.on('close',()=>{if(roomRole==='guest')setStatus('Die Verbindung zum Rennleiter wurde getrennt.')});
+				hostConnection.on('error',reportPeerError);
+			});
+		}
+		document.getElementById('create-room').addEventListener('click',createRoom);
+		document.getElementById('join-room').addEventListener('click',joinRoom);
+		document.getElementById('room-input').addEventListener('input',event=>{event.target.value=event.target.value.replace(/[^a-z0-9]/gi,'').slice(0,6).toUpperCase()});
+		document.getElementById('solo-race').addEventListener('click',()=>{roomRole='solo';beginRace()});
+		document.getElementById('start-race').addEventListener('click',()=>{if(roomRole==='host'){beginRace();sendToRoom({type:'start'})}});
+		document.getElementById('leave-room').addEventListener('click',leaveRoom);
+		addEventListener('keydown',event=>{keys[event.code]=true;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(event.code))event.preventDefault();if(event.code==='KeyR'&&raceActive){state.x=spawnPosition.x;state.z=spawnPosition.z;state.heading=Math.PI/2;state.speed=0;state.lap=1;state.lastT=0;lapEl.textContent='01'}},{passive:false});
+		addEventListener('keyup',event=>keys[event.code]=false);
+		addEventListener('blur',()=>{for(const key of Object.keys(keys))keys[key]=false});
 		function onRoad(x,z){const t=Math.atan2(z/B,x/A),c=centerAt(t),n=normalAt(t),offset=(x-c.x)*n.x+(z-c.z)*n.z;return Math.abs(offset)<ROAD*.5+.8}
 		const clock=new THREE.Clock();
 		const desiredCam=new THREE.Vector3(),lookAt=new THREE.Vector3();
 		function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);
-			const gas=keys.KeyW||keys.ArrowUp, reverse=keys.KeyS||keys.ArrowDown, brake=keys.Space, steer=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0);
-			if(gas||reverse||brake||steer){state.started=true;intro.classList.add('hide')}
-			const road=onRoad(state.x,state.z), max=road?67:27;
-			if(gas)state.speed=Math.min(max,state.speed+27*dt);
-			if(reverse)state.speed=Math.max(-13,state.speed-20*dt);
-			if(brake)state.speed*=Math.max(0,1-3.8*dt);
-			if(!gas&&!reverse)state.speed*=Math.max(0,1-(road?0.48:1.25)*dt);
-			const speedFactor=Math.min(1,Math.abs(state.speed)/9);
-			state.heading-=steer*speedFactor*(road?1.08:.62)*dt*Math.sign(state.speed||1);
-			state.x+=-Math.sin(state.heading)*state.speed*dt;
-			state.z+=-Math.cos(state.heading)*state.speed*dt;
+			if(raceActive){
+				const gas=keys.ArrowUp,brake=keys.ArrowDown,steer=(keys.ArrowRight?1:0)-(keys.ArrowLeft?1:0);
+				const onTrack=onRoad(state.x,state.z),max=onTrack?67:27;
+				if(gas)state.speed=Math.min(max,state.speed+27*dt);
+				if(brake)state.speed=Math.max(-13,state.speed-20*dt);
+				if(!gas&&!brake)state.speed*=Math.max(0,1-(onTrack?0.48:1.25)*dt);
+				const speedFactor=Math.min(1,Math.abs(state.speed)/9);
+				state.heading-=steer*speedFactor*(onTrack?1.08:.62)*dt*Math.sign(state.speed||1);
+				state.x+=-Math.sin(state.heading)*state.speed*dt;state.z+=-Math.cos(state.heading)*state.speed*dt;
+				const t=(Math.atan2(state.z/B,state.x/A)+Math.PI*2)%(Math.PI*2);
+				if(state.lastT>5.7&&t<.55){state.lap++;lapEl.textContent=String(state.lap).padStart(2,'0')}
+				state.lastT=t;state.elapsed+=dt;
+			}
 			car.position.set(state.x,.02,state.z);car.rotation.y=state.heading;
-			// Detect a completed lap from the car crossing the start line.
-			const t=(Math.atan2(state.z/B,state.x/A)+Math.PI*2)%(Math.PI*2);
-			if(state.started&&state.lastT>5.7&&t<.55){state.lap++;lapEl.textContent=String(state.lap).padStart(2,'0')}
-			state.lastT=t;if(state.started)state.elapsed+=dt;
+			for(const remote of remoteCars.values()){
+				remote.model.position.lerp(remote.target,1-Math.exp(-12*dt));
+				const angle=Math.atan2(Math.sin(remote.heading-remote.model.rotation.y),Math.cos(remote.heading-remote.model.rotation.y));
+				remote.model.rotation.y+=angle*(1-Math.exp(-12*dt));
+			}
 			speedEl.textContent=String(Math.round(Math.abs(state.speed)*3.6)).padStart(3,'0');
 			const mins=Math.floor(state.elapsed/60),secs=(state.elapsed%60).toFixed(1).padStart(4,'0');timerEl.textContent=`${String(mins).padStart(2,'0')}:${secs}`;
 			desiredCam.set(state.x+Math.sin(state.heading)*10,6.1,state.z+Math.cos(state.heading)*10);
