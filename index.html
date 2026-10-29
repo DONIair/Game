@@ -34,6 +34,15 @@
 			<p>Erstelle einen Rennraum oder tritt mit einem Code bei. Alle im Raum fahren auf derselben Strecke.</p>
 			<label class="field-label" for="player-name">DEIN NAME</label>
 			<input class="field" id="player-name" maxlength="16" placeholder="Racer" autocomplete="nickname">
+			<div id="track-settings"><label class="field-label" for="track-select">RENNSTRECKE</label>
+				<select class="field" id="track-select">
+					<option value="club">Club-Rundkurs</option>
+					<option value="athletics">Leichtathletik-Oval</option>
+					<option value="alpine" selected>Alpine GP · Formel-1-Strecke</option>
+					<option value="coast">Coastal GP · Formel-1-Strecke</option>
+					<option value="forest">Forest GP · Formel-1-Strecke</option>
+				</select>
+			</div>
 			<div id="setup-actions">
 				<div class="actions">
 					<button class="button" id="create-room">RAUM ERSTELLEN</button>
@@ -85,17 +94,28 @@
 		const mat=(color,roughness=.8,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
 		const grassMat=mat(0x526d3e), asphaltMat=mat(0x34383a,.96), curbRed=mat(0xd94e3d), curbWhite=mat(0xe9e5d9), lineMat=mat(0xe9e8d7), railMat=mat(0x9da6a6,.35,.72);
 		const ground=new THREE.Mesh(new THREE.PlaneGeometry(900,900),grassMat); ground.rotation.x=-Math.PI/2; ground.position.y=-.12; ground.receiveShadow=true; scene.add(ground);
-		const ROAD=16,STEPS=420,TAU=Math.PI*2;
-		const circuit=new THREE.CatmullRomCurve3([
-			[-58,0],[-38,0],[-14,0],[12,0],[37,0],[53,-1],[70,-3],[76,-15],[74,-30],
-			[57,-36],[45,-41],[31,-42],[19,-38],[10,-27],[0,-24],[-12,-24],[-25,-27],
-			[-38,-32],[-52,-34],[-64,-29],[-90,-28],[-105,-14],[-110,-2]
-		].map(([x,z])=>new THREE.Vector3(x,0,z)),true,'catmullrom',.35);
+		const ROAD=16,STEPS=420,TAU=Math.PI*2,CHECKPOINT_COUNT=8;
+		const circuits={
+			club:{name:'Club-Rundkurs',points:[[-55,0],[-40,-14],[-14,-17],[14,-16],[38,-10],[51,-1],[47,10],[34,16],[19,12],[8,5],[-5,5],[-16,14],[-34,17],[-49,11]]},
+			athletics:{name:'Leichtathletik-Oval',points:[[-72,0],[-66,-12],[-48,-17],[-20,-18],[20,-18],[48,-17],[66,-12],[72,0],[66,12],[48,17],[20,18],[-20,18],[-48,17],[-66,12]]},
+			alpine:{name:'Alpine GP',points:[[-58,0],[-38,0],[-14,0],[12,0],[37,0],[53,-1],[70,-3],[76,-15],[74,-30],[57,-36],[45,-41],[31,-42],[19,-38],[10,-27],[0,-24],[-12,-24],[-25,-27],[-38,-32],[-52,-34],[-64,-29],[-90,-28],[-105,-14],[-110,-2]]},
+			coast:{name:'Coastal GP',points:[[-72,-8],[-45,-8],[-15,-8],[15,-8],[39,-8],[54,-3],[63,7],[64,20],[56,31],[42,35],[28,31],[17,22],[6,17],[-7,19],[-20,28],[-35,34],[-51,32],[-64,24],[-72,13],[-69,3]]},
+			forest:{name:'Forest GP',points:[[-65,35],[-40,35],[-10,35],[20,35],[45,35],[58,28],[62,15],[58,3],[45,-4],[30,-4],[18,4],[5,10],[-5,5],[-10,-10],[-20,-20],[-35,-22],[-50,-17],[-60,-7],[-73,-15],[-90,-18],[-103,-8],[-103,8],[-90,19],[-82,18]]}
+		};
+		let activeTrackId='alpine',circuit=null,trackSamples=[];
+		const trackGroup=new THREE.Group();scene.add(trackGroup);
+		const trunkMat=mat(0x554634),leafMats=[mat(0x294a32),mat(0x36583a),mat(0x476542)];
+		const buildingMat=mat(0x555d5d),roofMat=mat(0x262e30,.55,.25),seatMats=[mat(0x314d60),mat(0xc2c5bd)];
+		const startMats=[mat(0xf6f5ea),mat(0x202426)];
 		function centerAt(t){return circuit.getPointAt((t/TAU+1)%1)}
 		function tangentAt(t){return circuit.getTangentAt((t/TAU+1)%1)}
 		function normalAt(t){const tangent=tangentAt(t);return new THREE.Vector3(tangent.z,0,-tangent.x)}
 		function trackAngleAt(t){const tangent=tangentAt(t);return Math.atan2(tangent.x,tangent.z)}
-		const trackSamples=Array.from({length:STEPS},(_,i)=>{const t=i/STEPS*TAU,c=centerAt(t),n=normalAt(t);return{x:c.x,z:c.z,nx:n.x,nz:n.z,t}});
+		function gridPosition(slot=0){
+			const startCenter=centerAt(0),startTangent=tangentAt(0),startNormal=normalAt(0);
+			const distance=4.5+Math.floor((slot+1)/2)*5,lane=slot===0?0:slot%2===1?-3.2:3.2;
+			return{x:startCenter.x-startTangent.x*distance+startNormal.x*lane,z:startCenter.z-startTangent.z*distance+startNormal.z*lane};
+		}
 		function trackProjection(x,z){
 			let nearest=trackSamples[0],distance=Infinity;
 			for(const sample of trackSamples){const dx=x-sample.x,dz=z-sample.z,d=dx*dx+dz*dz;if(d<distance){nearest=sample;distance=d}}
@@ -104,53 +124,51 @@
 		function ribbonGeometry(inner,outer,segments=STEPS){
 			const positions=[],indices=[];
 			for(let i=0;i<=segments;i++){
-				const t=i/segments*Math.PI*2,c=centerAt(t),n=normalAt(t);
-				for(const off of [inner,outer]) positions.push(c.x+n.x*off,.015,c.z+n.z*off);
+				const t=i/segments*TAU,c=centerAt(t),n=normalAt(t);
+				for(const off of [inner,outer])positions.push(c.x+n.x*off,.015,c.z+n.z*off);
 			}
 			for(let i=0;i<segments;i++){const a=i*2,b=a+1,c=a+2,d=a+3;indices.push(a,c,b,b,c,d)}
-			const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setIndex(indices);g.computeVertexNormals();return g;
+			const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
 		}
-		const road=new THREE.Mesh(ribbonGeometry(-ROAD/2,ROAD/2),asphaltMat); road.receiveShadow=true; scene.add(road);
-		// Painted curbs and continuous safety rails follow every corner of the GP circuit.
-		for(const side of [-1,1]){
-			const curb=new THREE.Mesh(ribbonGeometry(side===-1?-ROAD/2-1.25:-ROAD/2,side===-1?-ROAD/2:ROAD/2+1.25),curbWhite);
-			// Replace the broad strip with alternating curb blocks.
-			scene.add(curb); curb.visible=false;
-			for(let i=0;i<200;i++){
-				const t=i/200*TAU, c=centerAt(t), n=normalAt(t), off=side*(ROAD/2+.63);
-				const block=new THREE.Mesh(new THREE.BoxGeometry(1.02,.16,1.25),i%2?curbRed:curbWhite);
-				block.position.set(c.x+n.x*off,.09,c.z+n.z*off); block.rotation.y=trackAngleAt(t); block.receiveShadow=true; scene.add(block);
+		function rebuildTrack(trackId){
+			const definition=circuits[trackId];
+			if(!definition)throw new Error(`Unbekannte Rennstrecke: ${trackId}`);
+			for(const child of [...trackGroup.children]){
+				trackGroup.remove(child);
+				child.traverse(object=>object.geometry?.dispose());
 			}
-			const railPts=[]; for(let i=0;i<=480;i++){const t=i/480*TAU,c=centerAt(t),n=normalAt(t),o=side*(ROAD/2+2.6);railPts.push(new THREE.Vector3(c.x+n.x*o,.8,c.z+n.z*o))}
-			const rail=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPts),900,.16,8,false),railMat);rail.castShadow=true;scene.add(rail);
+			activeTrackId=trackId;
+			circuit=new THREE.CatmullRomCurve3(definition.points.map(([x,z])=>new THREE.Vector3(x,0,z)),true,'catmullrom',.35);
+			trackSamples=Array.from({length:STEPS},(_,i)=>{const t=i/STEPS*TAU,c=centerAt(t),n=normalAt(t);return{x:c.x,z:c.z,nx:n.x,nz:n.z,t}});
+			const road=new THREE.Mesh(ribbonGeometry(-ROAD/2,ROAD/2),asphaltMat);road.receiveShadow=true;trackGroup.add(road);
+			for(const side of [-1,1]){
+				const curb=new THREE.Mesh(ribbonGeometry(side===-1?-ROAD/2-1.25:-ROAD/2,side===-1?-ROAD/2:ROAD/2+1.25),curbWhite);curb.visible=false;trackGroup.add(curb);
+				for(let i=0;i<200;i++){
+					const t=i/200*TAU,c=centerAt(t),n=normalAt(t),off=side*(ROAD/2+.63);
+					const block=new THREE.Mesh(new THREE.BoxGeometry(1.02,.16,1.25),i%2?curbRed:curbWhite);
+					block.position.set(c.x+n.x*off,.09,c.z+n.z*off);block.rotation.y=trackAngleAt(t);block.receiveShadow=true;trackGroup.add(block);
+				}
+				const railPoints=[];
+				for(let i=0;i<=480;i++){const t=i/480*TAU,c=centerAt(t),n=normalAt(t),offset=side*(ROAD/2+2.6);railPoints.push(new THREE.Vector3(c.x+n.x*offset,.8,c.z+n.z*offset))}
+				const rail=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPoints),900,.16,8,false),railMat);rail.castShadow=true;trackGroup.add(rail);
+			}
+			for(let i=0;i<84;i++){const t=(i+.5)/84*TAU,c=centerAt(t),dash=new THREE.Mesh(new THREE.BoxGeometry(.16,.025,1.65),lineMat);dash.position.set(c.x,.035,c.z);dash.rotation.y=trackAngleAt(t);trackGroup.add(dash)}
+			const start=new THREE.Group();
+			for(let i=0;i<12;i++){const tile=new THREE.Mesh(new THREE.BoxGeometry(1.32,.035,.68),startMats[(i+Math.floor(i/2))%2]);tile.position.set(-5.4+i*.98,.045,0);start.add(tile)}
+			start.rotation.y=trackAngleAt(0);start.position.copy(centerAt(0));trackGroup.add(start);
+			let seed=9317+Object.keys(circuits).indexOf(trackId)*7919;
+			const rand=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296};
+			for(let i=0;i<110;i++){
+				const x=(rand()-.5)*270,z=(rand()-.5)*180;if(trackProjection(x,z).distance<ROAD/2+7)continue;
+				const h=2.4+rand()*3.2,tree=new THREE.Group(),trunk=new THREE.Mesh(new THREE.CylinderGeometry(.16,.26,h*.48,7),trunkMat),crown=new THREE.Mesh(new THREE.ConeGeometry(1.05+rand()*.45,h*.78,7),leafMats[i%3]);
+				trunk.position.y=h*.24;crown.position.y=h*.75;crown.castShadow=true;tree.add(trunk,crown);tree.position.set(x,0,z);tree.scale.setScalar(.78+rand()*.62);trackGroup.add(tree);
+			}
+			const pit=new THREE.Group(),building=new THREE.Mesh(new THREE.BoxGeometry(28,5,8),buildingMat),roof=new THREE.Mesh(new THREE.BoxGeometry(29,.55,9),roofMat);
+			building.position.y=2.5;building.castShadow=true;roof.position.y=5.25;pit.add(building,roof);
+			for(let i=0;i<18;i++){const seat=new THREE.Mesh(new THREE.BoxGeometry(1.3,.35,4.2),seatMats[i%2]);seat.position.set(-14+i*1.6,1.2,7);seat.rotation.x=-.12;pit.add(seat)}
+			const startCenter=centerAt(0),startNormal=normalAt(0);pit.position.set(startCenter.x+startNormal.x*(ROAD/2+17),0,startCenter.z+startNormal.z*(ROAD/2+17));pit.rotation.y=trackAngleAt(0);trackGroup.add(pit);
 		}
-		// Broken center line plus a start/finish stripe.
-		for(let i=0;i<84;i++){
-			const t=(i+.5)/84*TAU,c=centerAt(t),n=normalAt(t);
-			const dash=new THREE.Mesh(new THREE.BoxGeometry(.16,.025,1.65),lineMat);
-			dash.position.set(c.x,.035,c.z);dash.rotation.y=trackAngleAt(t);scene.add(dash);
-		}
-		const start=new THREE.Group();
-		for(let i=0;i<12;i++){const tile=new THREE.Mesh(new THREE.BoxGeometry(1.32,.035,.68),mat((i+Math.floor(i/2))%2?0xf6f5ea:0x202426));tile.position.set(-5.4+i*.98,.045,0);start.add(tile)}
-		start.rotation.y=trackAngleAt(0);start.position.copy(centerAt(0));scene.add(start);
-
-		// Sparse trees and trackside structures give the circuit a sense of scale.
-		const trunkMat=mat(0x554634),leafMats=[mat(0x294a32),mat(0x36583a),mat(0x476542)];
-		let seed=9317; const rand=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296};
-		for(let i=0;i<110;i++){
-			const x=(rand()-.5)*230,z=(rand()-.5)*160;
-			if(trackProjection(x,z).distance<ROAD/2+7)continue;
-			const h=2.4+rand()*3.2, tree=new THREE.Group();
-			const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.16,.26,h*.48,7),trunkMat);trunk.position.y=h*.24;tree.add(trunk);
-			const crown=new THREE.Mesh(new THREE.ConeGeometry(1.05+rand()*.45,h*.78,7),leafMats[i%3]);crown.position.y=h*.75;crown.castShadow=true;tree.add(crown);
-			tree.position.set(x,0,z);tree.scale.setScalar(.78+rand()*.62);scene.add(tree);
-		}
-		// Paddock buildings and grandstands beyond the far side of the track.
-		const building=new THREE.Mesh(new THREE.BoxGeometry(28,5,8),mat(0x555d5d));building.position.set(6,2.5,-59);building.castShadow=true;scene.add(building);
-		const roof=new THREE.Mesh(new THREE.BoxGeometry(29,.55,9),mat(0x262e30,.55,.25));roof.position.set(6,5.25,-59);scene.add(roof);
-		for(let i=0;i<18;i++){
-			const seat=new THREE.Mesh(new THREE.BoxGeometry(1.3,.35,4.2),mat(i%2?0x314d60:0xc2c5bd));seat.position.set(-26+i*1.55,1.2,-61);seat.rotation.x=-.12;scene.add(seat);
-		}
+		rebuildTrack(activeTrackId);
 
 		// A sculpted sports coupe assembled from contoured bodywork, glass, wheels and aero details.
 		const car=new THREE.Group(); scene.add(car);
@@ -209,17 +227,12 @@
 		const wing=new THREE.Mesh(new THREE.BoxGeometry(1.85,.13,.48),paint);wing.position.set(0,1.43,1.88);car.add(wing);
 		const diffuser=new THREE.Mesh(new THREE.BoxGeometry(1.5,.19,.28),dark);diffuser.position.set(0,.36,2.19);car.add(diffuser);
 
-		const startCenter=centerAt(0),startTangent=tangentAt(0),startNormal=normalAt(0);
-		function gridPosition(slot=0){
-			const distance=4.5+Math.floor((slot+1)/2)*5,lane=slot===0?0:slot%2===1?-3.2:3.2;
-			return{x:startCenter.x-startTangent.x*distance+startNormal.x*lane,z:startCenter.z-startTangent.z*distance+startNormal.z*lane};
-		}
-		const initialGrid=gridPosition();
-		const state={x:initialGrid.x,y:0,z:initialGrid.z,heading:trackAngleAt(0)-Math.PI,speed:0,lateralSpeed:0,lap:1,completedLaps:0,elapsed:0,lastT:0,lapArmed:false,damage:0,impactYaw:0,impactCooldown:0};
+		let initialGrid=gridPosition();
+		const state={x:initialGrid.x,y:0,z:initialGrid.z,heading:trackAngleAt(0)-Math.PI,speed:0,lateralSpeed:0,lap:1,completedLaps:0,nextCheckpoint:1,previousX:initialGrid.x,previousZ:initialGrid.z,elapsed:0,damage:0,impactYaw:0,impactCooldown:0};
 		const keys={};
 		const speedEl=document.getElementById('speed'),timerEl=document.getElementById('timer'),lapEl=document.getElementById('lap'),intro=document.getElementById('intro');
-		const lobby=document.getElementById('lobby'),statusEl=document.getElementById('connection-status'),roomCard=document.getElementById('room-card'),setupActions=document.getElementById('setup-actions');
-		const roomCodeEl=document.getElementById('room-code'),rosterEl=document.getElementById('roster'),roomBadge=document.getElementById('room-badge'),startButton=document.getElementById('start-race');
+		const lobby=document.getElementById('lobby'),statusEl=document.getElementById('connection-status'),roomCard=document.getElementById('room-card'),setupActions=document.getElementById('setup-actions'),trackSettings=document.getElementById('track-settings');
+		const roomCodeEl=document.getElementById('room-code'),rosterEl=document.getElementById('roster'),roomBadge=document.getElementById('room-badge'),startButton=document.getElementById('start-race'),trackSelect=document.getElementById('track-select');
 		const damageFill=document.getElementById('damage-fill'),leaderRows=document.getElementById('leader-rows'),raceOverlay=document.getElementById('race-overlay'),raceCall=document.getElementById('race-call'),raceCaption=document.getElementById('race-caption'),startLights=[...document.querySelectorAll('.start-light')];
 		const peerColors=[0x35d7b1,0x5388ff,0xffbd3d,0xc96bff,0xededed,0xff6d55,0x62d95b];
 		const connections=new Map(),players=new Map(),remoteCars=new Map();
@@ -228,8 +241,27 @@
 		const setStatus=message=>{statusEl.textContent=message};
 		const randomCode=()=>Math.random().toString(36).slice(2,8).toUpperCase().padEnd(6,'0');
 		const playerColor=id=>peerColors[[...String(id)].reduce((sum,char)=>sum+char.charCodeAt(0),0)%peerColors.length];
-		function ownSnapshot(){const trackT=trackProjection(state.x,state.z).sample.t;return{id:playerId,name:localName(),color:0x116fe0,x:state.x,z:state.z,heading:state.heading,speed:state.speed,lap:state.lap,progress:state.completedLaps+(state.lapArmed?1:0)+trackT/TAU}}
+		function ownSnapshot(){return{id:playerId,name:localName(),color:0x116fe0,x:state.x,z:state.z,heading:state.heading,speed:state.speed,lap:state.lap,progress:state.completedLaps+state.nextCheckpoint/CHECKPOINT_COUNT}}
 		function validSnapshot(player){return player&&typeof player.id==='string'&&typeof player.name==='string'&&[player.x,player.z,player.heading,player.speed,player.lap,player.progress].every(Number.isFinite)}
+		function applyTrack(trackId,notifyPeers=false,spawn=null){
+			if(!Object.hasOwn(circuits,trackId)){setStatus(`Unbekannte Rennstrecke: ${trackId}`);return false}
+			if(raceActive){setStatus('Die Strecke kann während des Rennens nicht gewechselt werden.');return false}
+			rebuildTrack(trackId);trackSelect.value=trackId;initialGrid=gridPosition();spawnPosition=spawn&&Number.isFinite(spawn.x)&&Number.isFinite(spawn.z)?{x:spawn.x,z:spawn.z}:{...initialGrid};
+			state.x=spawnPosition.x;state.z=spawnPosition.z;state.previousX=state.x;state.previousZ=state.z;
+			state.heading=spawn&&Number.isFinite(spawn.heading)?spawn.heading:trackAngleAt(0)-Math.PI;
+			state.speed=0;state.lateralSpeed=0;state.impactYaw=0;state.damage=0;state.lap=1;state.completedLaps=0;state.nextCheckpoint=1;state.elapsed=0;
+			lapEl.textContent=`01 / ${String(targetLaps).padStart(2,'0')}`;damageFill.style.width='0%';
+			setStatus(`Strecke: ${circuits[trackId].name}`);
+			if(notifyPeers&&roomRole==='host'){
+				for(const[id,connection]of connections){
+					const slot=[...players.keys()].indexOf(id)+1,grid=gridPosition(slot);
+					const player=players.get(id);if(player)player.snapshot={...grid,heading:trackAngleAt(0)-Math.PI,speed:0,lap:1,progress:1/CHECKPOINT_COUNT};
+					connection.send({type:'track',trackId,spawn:{...grid,heading:trackAngleAt(0)-Math.PI},players:currentPlayers()});
+				}
+				renderPlayers(currentPlayers());broadcastState();
+			}
+			return true;
+		}
 		function updateRoster(list){
 			rosterEl.replaceChildren();
 			for(const entry of list){
@@ -280,8 +312,8 @@
 		}
 		function beginRace(startAt=Date.now()+5000,laps=targetLaps){
 			targetLaps=[3,5,10].includes(Number(laps))?Number(laps):3;
-			raceActive=true;state.elapsed=0;state.lap=1;state.completedLaps=0;state.lapArmed=false;state.damage=0;state.speed=0;state.lateralSpeed=0;state.impactYaw=0;
-			state.lastT=trackProjection(state.x,state.z).sample.t;raceStartAt=startAt;cameraShake=0;
+			raceActive=true;trackSelect.disabled=true;state.elapsed=0;state.lap=1;state.completedLaps=0;state.nextCheckpoint=1;state.damage=0;state.speed=0;state.lateralSpeed=0;state.impactYaw=0;
+			state.previousX=state.x;state.previousZ=state.z;raceStartAt=startAt;cameraShake=0;
 			lapEl.textContent=`01 / ${String(targetLaps).padStart(2,'0')}`;damageFill.style.width='0%';
 			document.getElementById('finish-return').classList.add('hide');
 			raceOverlay.classList.remove('hide');raceCall.textContent='5';raceCaption.textContent='RENNSTART';startLights.forEach(light=>light.classList.remove('on'));
@@ -297,7 +329,7 @@
 			for(const connection of connections.values())connection.close();
 			connections.clear();removeRemoteCars();
 			if(peer){peer.destroy();peer=null}
-			roomRole=null;roomCode='';playerId='host';raceActive=false;raceOverlay.classList.add('hide');spawnPosition={...initialGrid};state.x=initialGrid.x;state.z=initialGrid.z;state.heading=trackAngleAt(0)-Math.PI;state.speed=0;state.lateralSpeed=0;state.elapsed=0;state.lap=1;state.completedLaps=0;lapEl.textContent='01 / 03';targetLaps=3;
+			roomRole=null;roomCode='';playerId='host';raceActive=false;raceOverlay.classList.add('hide');trackSelect.disabled=false;trackSettings.classList.remove('hide');spawnPosition={...initialGrid};state.x=initialGrid.x;state.z=initialGrid.z;state.previousX=state.x;state.previousZ=state.z;state.heading=trackAngleAt(0)-Math.PI;state.speed=0;state.lateralSpeed=0;state.elapsed=0;state.lap=1;state.completedLaps=0;state.nextCheckpoint=1;lapEl.textContent='01 / 03';targetLaps=3;
 			setupActions.classList.remove('hide');roomCard.classList.add('hide');roomBadge.textContent='MULTIPLAYER · READY';startButton.disabled=false;document.getElementById('lap-settings').classList.remove('hide');lobby.classList.remove('hide');intro.classList.add('hide');
 			setStatus('Pfeiltasten zum Lenken · ↑ Gas · ↓ Bremse');
 		}
@@ -320,11 +352,11 @@
 					if(message.type==='join'&&typeof message.name==='string'){
 						if(!players.has(connection.peer)&&players.size>=7){connection.send({type:'full'});connection.close();return}
 						const name=message.name.trim().slice(0,16)||'Racer';
-						const slot=players.size+1,spawn=gridPosition(slot),startState={...spawn,heading:trackAngleAt(0)-Math.PI,speed:0,lap:1,progress:trackProjection(spawn.x,spawn.z).sample.t/TAU};
+						const slot=players.size+1,spawn=gridPosition(slot),startState={...spawn,heading:trackAngleAt(0)-Math.PI,speed:0,lap:1,progress:1/CHECKPOINT_COUNT};
 						players.set(connection.peer,{id:connection.peer,name,snapshot:startState});
 						connections.set(connection.peer,connection);
 						renderPlayers(currentPlayers());
-						connection.send({type:'welcome',playerId:connection.peer,running:raceActive,spawn:startState,startAt:raceStartAt,laps:targetLaps,players:currentPlayers()});
+						connection.send({type:'welcome',playerId:connection.peer,running:raceActive,trackId:activeTrackId,spawn:startState,startAt:raceStartAt,laps:targetLaps,players:currentPlayers()});
 						updateRoster(currentPlayers());setStatus(`${name} ist beigetreten.`);
 					}else if(message.type==='input'&&players.has(connection.peer)&&validSnapshot({...message,id:connection.peer,name:'Racer',lap:message.lap})){
 						const player=players.get(connection.peer);
@@ -342,7 +374,7 @@
 			if(peer)return;
 			const code=document.getElementById('room-input').value.trim().toUpperCase();
 			if(!/^[A-Z0-9]{6}$/.test(code)){setStatus('Bitte gib einen sechsstelligen Raumcode ein.');return}
-			roomRole='guest';roomCode=code;setRoomScreen(code,'RENNRAUM');roomBadge.textContent='RAUM '+code;
+			roomRole='guest';roomCode=code;setRoomScreen(code,'RENNRAUM');roomBadge.textContent='RAUM '+code;trackSettings.classList.add('hide');
 			document.getElementById('start-race').classList.add('hide');document.getElementById('lap-settings').classList.add('hide');setStatus('Suche Rennraum …');
 			try{peer=new Peer({debug:1})}catch(error){peer=null;roomRole=null;setStatus('Multiplayer konnte nicht gestartet werden: '+(error instanceof Error?error.message:'unbekannter Fehler'));return}
 			peer.on('error',reportPeerError);
@@ -353,12 +385,18 @@
 					if(message.type==='full'){setStatus('Dieser Rennraum ist voll (maximal 8 Fahrer).');return}
 					if(message.type==='welcome'){
 						playerId=message.playerId;
-						if(message.spawn&&Number.isFinite(message.spawn.x)&&Number.isFinite(message.spawn.z)){spawnPosition={x:message.spawn.x,z:message.spawn.z};state.x=spawnPosition.x;state.z=spawnPosition.z;state.heading=Number.isFinite(message.spawn.heading)?message.spawn.heading:trackAngleAt(0)-Math.PI}
+						if(!applyTrack(message.trackId,false,message.spawn))return;
 						setStatus(message.running?'Rennen läuft – viel Erfolg!':'Verbunden. Warte auf den Rennstart.');
 						renderPlayers(message.players||[]);if(message.running)beginRace(message.startAt,message.laps);
 						networkTimer=setInterval(()=>{if(hostConnection?.open)hostConnection.send({type:'input',...ownSnapshot()})},50);
+					}else if(message.type==='track'){
+						applyTrack(message.trackId,false,message.spawn);
+						renderPlayers(message.players||[]);
 					}else if(message.type==='state'&&Array.isArray(message.players))renderPlayers(message.players);
-					else if(message.type==='start')beginRace(message.startAt,message.laps);
+					else if(message.type==='start'){
+						if(message.trackId!==activeTrackId&&!applyTrack(message.trackId,false))return;
+						beginRace(message.startAt,message.laps);
+					}
 				});
 				hostConnection.on('close',()=>{if(roomRole==='guest')setStatus('Die Verbindung zum Rennleiter wurde getrennt.')});
 				hostConnection.on('error',reportPeerError);
@@ -367,12 +405,13 @@
 		document.getElementById('create-room').addEventListener('click',createRoom);
 		document.getElementById('join-room').addEventListener('click',joinRoom);
 		document.getElementById('room-input').addEventListener('input',event=>{event.target.value=event.target.value.replace(/[^a-z0-9]/gi,'').slice(0,6).toUpperCase()});
+		trackSelect.addEventListener('change',()=>{if(!applyTrack(trackSelect.value,roomRole==='host'))trackSelect.value=activeTrackId});
 		document.getElementById('lap-count').addEventListener('change',event=>{targetLaps=Number(event.target.value)||3});
 		document.getElementById('solo-race').addEventListener('click',()=>{roomRole='solo';beginRace(Date.now()+5000,Number(document.getElementById('lap-count').value))});
-		document.getElementById('start-race').addEventListener('click',()=>{if(roomRole==='host'){const startAt=Date.now()+5000,laps=Number(document.getElementById('lap-count').value);beginRace(startAt,laps);sendToRoom({type:'start',startAt,laps})}});
+		document.getElementById('start-race').addEventListener('click',()=>{if(roomRole==='host'){const startAt=Date.now()+5000,laps=Number(document.getElementById('lap-count').value);beginRace(startAt,laps);sendToRoom({type:'start',startAt,laps,trackId:activeTrackId})}});
 		document.getElementById('leave-room').addEventListener('click',leaveRoom);
 		document.getElementById('finish-return').addEventListener('click',leaveRoom);
-		addEventListener('keydown',event=>{keys[event.code]=true;if(raceActive&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(event.code))event.preventDefault();if(event.code==='KeyR'&&raceActive){state.x=spawnPosition.x;state.z=spawnPosition.z;state.heading=trackAngleAt(0)-Math.PI;state.speed=0;state.lateralSpeed=0;state.impactYaw=0;state.damage=0;state.lapArmed=false;state.lastT=trackProjection(state.x,state.z).sample.t}},{passive:false});
+		addEventListener('keydown',event=>{keys[event.code]=true;if(raceActive&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(event.code))event.preventDefault();if(event.code==='KeyR'&&raceActive){state.x=spawnPosition.x;state.z=spawnPosition.z;state.previousX=state.x;state.previousZ=state.z;state.heading=trackAngleAt(0)-Math.PI;state.speed=0;state.lateralSpeed=0;state.impactYaw=0;state.damage=0;state.nextCheckpoint=1;state.lap=state.completedLaps+1}},{passive:false});
 		addEventListener('keyup',event=>keys[event.code]=false);
 		addEventListener('blur',()=>{for(const key of Object.keys(keys))keys[key]=false});
 		const clock=new THREE.Clock();
@@ -410,6 +449,24 @@
 				}
 			}
 		}
+		function crossedCheckpoint(previousX,previousZ,x,z,index){
+			const t=index/CHECKPOINT_COUNT*TAU,center=centerAt(t),tangent=tangentAt(t),normal=normalAt(t);
+			const before=(previousX-center.x)*tangent.x+(previousZ-center.z)*tangent.z;
+			const after=(x-center.x)*tangent.x+(z-center.z)*tangent.z;
+			if(before>=0||after<0)return false;
+			const fraction=before/(before-after),crossX=previousX+(x-previousX)*fraction,crossZ=previousZ+(z-previousZ)*fraction;
+			const lateral=(crossX-center.x)*normal.x+(crossZ-center.z)*normal.z;
+			return Math.abs(lateral)<=ROAD/2-1;
+		}
+		function updateRaceProgress(previousX,previousZ){
+			if(!crossedCheckpoint(previousX,previousZ,state.x,state.z,state.nextCheckpoint))return;
+			if(state.nextCheckpoint<CHECKPOINT_COUNT){state.nextCheckpoint++;return}
+			state.completedLaps++;state.nextCheckpoint=1;state.lap=Math.min(targetLaps,state.completedLaps+1);
+			lapEl.textContent=`${String(state.lap).padStart(2,'0')} / ${String(targetLaps).padStart(2,'0')}`;updateLeaderboard();
+			if(state.completedLaps>=targetLaps){
+				raceActive=false;state.speed=0;state.lateralSpeed=0;raceOverlay.classList.remove('hide');raceCall.textContent='ZIEL!';raceCaption.textContent=`${targetLaps} RUNDEN · ${timerEl.textContent}`;document.getElementById('finish-return').classList.remove('hide');
+			}
+		}
 		function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);
 			if(raceActive){
 				const now=Date.now(),countdown=Math.ceil((raceStartAt-now)/1000);
@@ -421,6 +478,7 @@
 				}else raceOverlay.classList.add('hide');
 				if(now>=raceStartAt){
 					state.elapsed=(now-raceStartAt)/1000;
+					const previousX=state.x,previousZ=state.z;
 					const projection=trackProjection(state.x,state.z),onAsphalt=Math.abs(projection.offset)<ROAD/2,steer=(keys.ArrowRight?1:0)-(keys.ArrowLeft?1:0);
 					const enginePower=1-state.damage*.003,maxSpeed=onAsphalt?70:24;
 					if(keys.ArrowUp)state.speed=Math.min(maxSpeed,state.speed+11*enginePower*dt);
@@ -434,15 +492,8 @@
 					state.x+=(-Math.sin(state.heading)*state.speed+Math.cos(state.heading)*state.lateralSpeed)*dt;
 					state.z+=(-Math.cos(state.heading)*state.speed-Math.sin(state.heading)*state.lateralSpeed)*dt;
 					state.impactCooldown=Math.max(0,state.impactCooldown-dt);resolveBarrier();
-					const trackT=trackProjection(state.x,state.z).sample.t;
-					if(state.lastT>TAU-.12&&trackT<.12){
-						if(state.lapArmed){state.completedLaps++;state.lap=Math.min(targetLaps,state.completedLaps+1);lapEl.textContent=`${String(state.lap).padStart(2,'0')} / ${String(targetLaps).padStart(2,'0')}`;updateLeaderboard()}
-						else state.lapArmed=true;
-						if(state.completedLaps>=targetLaps){
-							raceActive=false;state.speed=0;state.lateralSpeed=0;raceOverlay.classList.remove('hide');raceCall.textContent='ZIEL!';raceCaption.textContent=`${targetLaps} RUNDEN · ${timerEl.textContent}`;document.getElementById('finish-return').classList.remove('hide');
-						}
-					}
-					state.lastT=trackT;
+					updateRaceProgress(previousX,previousZ);
+					state.previousX=state.x;state.previousZ=state.z;
 				}
 			}
 			car.position.set(state.x,.02,state.z);car.rotation.y=state.heading;
