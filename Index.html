@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="de">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+	<title>APEX — Racing</title>
+	<style>
+		*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101912;color:#fff;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}canvas{display:block}#hud{position:fixed;inset:0;pointer-events:none}.top{position:absolute;top:24px;left:28px;display:flex;align-items:center;gap:12px}.brand{font-size:13px;font-weight:900;letter-spacing:.24em}.brand em{color:#d7ff32;font-style:normal}.pill{border:1px solid #ffffff35;background:#08110bcc;border-radius:20px;padding:7px 12px;color:#c9d2c8;font-size:10px;letter-spacing:.12em}.stats{position:absolute;top:22px;right:26px;display:flex;gap:9px}.card{min-width:94px;padding:11px 15px;border:1px solid #ffffff28;background:#08110bcc;border-radius:8px}.label{font-size:9px;letter-spacing:.17em;color:#95a294}.value{margin-top:3px;font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}.unit{font-size:10px;color:#aab5a8}.bottom{position:absolute;left:28px;bottom:24px;display:flex;align-items:end;gap:22px}.controls{font-size:10px;color:#d0d6cf;letter-spacing:.08em;line-height:1.9;text-shadow:0 2px 6px #000}.key{display:inline-block;min-width:22px;text-align:center;padding:1px 5px;border:1px solid #ffffff55;border-radius:4px;background:#08110bcc;color:white;font-size:9px}.message{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;text-shadow:0 3px 14px #000}.message h1{font-size:clamp(34px,6vw,72px);line-height:.95;margin:0 0 12px;font-style:italic;letter-spacing:-.06em}.message p{font-size:11px;letter-spacing:.25em;color:#e4ff64}.message small{color:#ffffffad;letter-spacing:.1em}.hide{display:none}.footer{position:absolute;right:26px;bottom:24px;color:#ffffff9a;font-size:9px;letter-spacing:.12em}.green{color:#d7ff32}
+	</style>
+</head>
+<body>
+	<div id="hud">
+		<div class="top"><div class="brand">APEX <em>RACING</em></div><div class="pill">CIRCUIT · FREE DRIVE</div></div>
+		<div class="stats">
+			<div class="card"><div class="label">GESCHWINDIGKEIT</div><div class="value"><span id="speed">000</span> <span class="unit">KM/H</span></div></div>
+			<div class="card"><div class="label">RUNDE</div><div class="value" id="lap">01</div></div>
+			<div class="card"><div class="label">ZEIT</div><div class="value" id="timer">00:00.0</div></div>
+		</div>
+		<div class="message" id="intro"><h1>OWN THE<br><span class="green">APEX.</span></h1><p>DEIN RENNEN. DEINE LINIE.</p><small>W / ↑ BESCHLEUNIGEN &nbsp; · &nbsp; A / D LENKEN &nbsp; · &nbsp; SPACE BREMSE</small></div>
+		<div class="bottom"><div class="controls"><span class="key">W</span> / <span class="key">↑</span> GAS &nbsp; <span class="key">S</span> BREMSE<br><span class="key">A</span> <span class="key">D</span> LENKEN &nbsp; <span class="key">R</span> ZURÜCKSETZEN</div></div>
+		<div class="footer">THREE-DIMENSIONAL CIRCUIT <span class="green">//</span> 01</div>
+	</div>
+	<script type="module">
+		import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+		const scene = new THREE.Scene();
+		scene.background = new THREE.Color(0x9ab8c5);
+		scene.fog = new THREE.Fog(0x9ab8c5, 125, 310);
+		const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, .1, 650);
+		const renderer = new THREE.WebGLRenderer({antialias:true, powerPreference:'high-performance'});
+		renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+		renderer.setSize(innerWidth, innerHeight);
+		renderer.shadowMap.enabled = true;
+		renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+		renderer.outputColorSpace = THREE.SRGBColorSpace;
+		renderer.toneMapping = THREE.ACESFilmicToneMapping;
+		renderer.toneMappingExposure = 1.15;
+		document.body.appendChild(renderer.domElement);
+
+		scene.add(new THREE.HemisphereLight(0xe4f3ff, 0x48553b, 2.0));
+		const sun = new THREE.DirectionalLight(0xfff0d7, 3.1);
+		sun.position.set(-55, 85, 40); sun.castShadow = true;
+		sun.shadow.mapSize.set(2048,2048);
+		sun.shadow.camera.left=-115; sun.shadow.camera.right=115; sun.shadow.camera.top=115; sun.shadow.camera.bottom=-115;
+		sun.shadow.bias=-.00015; scene.add(sun);
+
+		const mat=(color,roughness=.8,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
+		const grassMat=mat(0x526d3e), asphaltMat=mat(0x34383a,.96), curbRed=mat(0xd94e3d), curbWhite=mat(0xe9e5d9), lineMat=mat(0xe9e8d7), railMat=mat(0x9da6a6,.35,.72);
+		const ground=new THREE.Mesh(new THREE.PlaneGeometry(900,900),grassMat); ground.rotation.x=-Math.PI/2; ground.position.y=-.12; ground.receiveShadow=true; scene.add(ground);
+		const A=68, B=43, ROAD=16, STEPS=420;
+		function centerAt(t){return new THREE.Vector3(A*Math.cos(t),0,B*Math.sin(t))}
+		function normalAt(t){const n=new THREE.Vector3(Math.cos(t)/A,0,Math.sin(t)/B).normalize();return n}
+		function ribbonGeometry(inner,outer,segments=STEPS){
+			const positions=[],indices=[];
+			for(let i=0;i<=segments;i++){
+				const t=i/segments*Math.PI*2,c=centerAt(t),n=normalAt(t);
+				for(const off of [inner,outer]) positions.push(c.x+n.x*off,.015,c.z+n.z*off);
+			}
+			for(let i=0;i<segments;i++){const a=i*2,b=a+1,c=a+2,d=a+3;indices.push(a,c,b,b,c,d)}
+			const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setIndex(indices);g.computeVertexNormals();return g;
+		}
+		const road=new THREE.Mesh(ribbonGeometry(-ROAD/2,ROAD/2),asphaltMat); road.receiveShadow=true; scene.add(road);
+		// Painted curbs and continuous safety rails follow the oval circuit.
+		for(const side of [-1,1]){
+			const curb=new THREE.Mesh(ribbonGeometry(side===-1?-ROAD/2-1.25:-ROAD/2,side===-1?-ROAD/2:ROAD/2+1.25),curbWhite);
+			// Replace the broad strip with alternating curb blocks.
+			scene.add(curb); curb.visible=false;
+			for(let i=0;i<84;i++){
+				const t=i/84*Math.PI*2, c=centerAt(t), n=normalAt(t), off=side*(ROAD/2+.63);
+				const block=new THREE.Mesh(new THREE.BoxGeometry(1.02,.16,1.25),i%2?curbRed:curbWhite);
+				block.position.set(c.x+n.x*off,.09,c.z+n.z*off); block.rotation.y=-t; block.receiveShadow=true; scene.add(block);
+			}
+			const railPts=[]; for(let i=0;i<=240;i++){const t=i/240*Math.PI*2,c=centerAt(t),n=normalAt(t),o=side*(ROAD/2+2.6);railPts.push(new THREE.Vector3(c.x+n.x*o,.8,c.z+n.z*o))}
+			const rail=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPts),900,.16,8,false),railMat);rail.castShadow=true;scene.add(rail);
+		}
+		// Broken center line plus a start/finish stripe.
+		for(let i=0;i<84;i++){
+			const t=(i+.5)/84*Math.PI*2,c=centerAt(t),n=normalAt(t);
+			const dash=new THREE.Mesh(new THREE.BoxGeometry(.16,.025,1.65),lineMat);
+			dash.position.set(c.x,.035,c.z);dash.rotation.y=-t;scene.add(dash);
+		}
+		const start=new THREE.Group();
+		for(let i=0;i<12;i++){const tile=new THREE.Mesh(new THREE.BoxGeometry(1.32,.035,.68),mat((i+Math.floor(i/2))%2?0xf6f5ea:0x202426));tile.position.set(-5.4+i*.98,.045,-ROAD/2+4);start.add(tile)}
+		start.rotation.y=Math.PI/2;start.position.set(A,0,0);scene.add(start);
+
+		// Sparse trees and trackside structures give the circuit a sense of scale.
+		const trunkMat=mat(0x554634),leafMats=[mat(0x294a32),mat(0x36583a),mat(0x476542)];
+		let seed=9317; const rand=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296};
+		for(let i=0;i<110;i++){
+			const x=(rand()-.5)*230,z=(rand()-.5)*160;
+			const ellipse=Math.sqrt((x/A)**2+(z/B)**2); if(ellipse>.73&&ellipse<1.38)continue;
+			const h=2.4+rand()*3.2, tree=new THREE.Group();
+			const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.16,.26,h*.48,7),trunkMat);trunk.position.y=h*.24;tree.add(trunk);
+			const crown=new THREE.Mesh(new THREE.ConeGeometry(1.05+rand()*.45,h*.78,7),leafMats[i%3]);crown.position.y=h*.75;crown.castShadow=true;tree.add(crown);
+			tree.position.set(x,0,z);tree.scale.setScalar(.78+rand()*.62);scene.add(tree);
+		}
+		// Paddock buildings and grandstands beyond the far side of the track.
+		const building=new THREE.Mesh(new THREE.BoxGeometry(28,5,8),mat(0x555d5d));building.position.set(6,2.5,-59);building.castShadow=true;scene.add(building);
+		const roof=new THREE.Mesh(new THREE.BoxGeometry(29,.55,9),mat(0x262e30,.55,.25));roof.position.set(6,5.25,-59);scene.add(roof);
+		for(let i=0;i<18;i++){
+			const seat=new THREE.Mesh(new THREE.BoxGeometry(1.3,.35,4.2),mat(i%2?0x314d60:0xc2c5bd));seat.position.set(-26+i*1.55,1.2,-61);seat.rotation.x=-.12;scene.add(seat);
+		}
+
+		// A sculpted sports coupe assembled from contoured bodywork, glass, wheels and aero details.
+		const car=new THREE.Group(); scene.add(car);
+		const paint=new THREE.MeshPhysicalMaterial({color:0xc32d25,metalness:.68,roughness:.24,clearcoat:1,clearcoatRoughness:.12});
+		const dark=mat(0x101719,.18,.18), rubber=mat(0x17191a,.92), chrome=mat(0xb9c4c6,.2,.85), glass=new THREE.MeshPhysicalMaterial({color:0x172b32,metalness:.25,roughness:.12,transparent:true,opacity:.88,clearcoat:1}), lamp=new THREE.MeshStandardMaterial({color:0xfff3d0,emissive:0xffc66b,emissiveIntensity:1.7}), tailLamp=new THREE.MeshStandardMaterial({color:0xed1920,emissive:0x9b080d,emissiveIntensity:1.1});
+		function extrudedFootprint(points,depth,y,material,bevel=.12){const s=new THREE.Shape();s.moveTo(points[0][0],points[0][1]);for(let i=1;i<points.length;i++)s.lineTo(points[i][0],points[i][1]);s.closePath();const g=new THREE.ExtrudeGeometry(s,{depth,bevelEnabled:bevel>0,bevelSegments:2,steps:1,bevelSize:bevel,bevelThickness:bevel,curveSegments:4});g.rotateX(Math.PI/2);const m=new THREE.Mesh(g,material);m.position.y=y;m.castShadow=true;m.receiveShadow=true;car.add(m);return m}
+		extrudedFootprint([[-.76,-2.36],[.76,-2.36],[1.02,-1.92],[1.08,-1.12],[1.02,.95],[.87,1.78],[.62,2.24],[-.62,2.24],[-.87,1.78],[-1.02,.95],[-1.08,-1.12],[-1.02,-1.92]],.72,.87,paint,.16);
+		// Hood and rear deck shape the upper body instead of a box-like shell.
+		extrudedFootprint([[-.79,-2.14],[.79,-2.14],[.91,-1.68],[.83,-.66],[-.83,-.66],[-.91,-1.68]],.12,1.04,paint,.08);
+		extrudedFootprint([[-.84,.85],[.84,.85],[.78,1.73],[.58,2.12],[-.58,2.12],[-.78,1.73]],.13,1.03,paint,.08);
+		// Cabin with a low roof and sloped windshield/rear glass.
+		extrudedFootprint([[-.73,-.92],[.73,-.92],[.69,.75],[.56,1.34],[-.56,1.34],[-.69,.75]],.68,1.58,paint,.09);
+		function poly(points,material){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(points.flat(),3));g.setIndex([0,1,2,0,2,3]);g.computeVertexNormals();const m=new THREE.Mesh(g,material);car.add(m);return m}
+		// Panoramic windshield and rear window, plus separate side windows.
+		poly([[-.68,1.68,-.96],[.68,1.68,-.96],[.54,2.20,-.35],[-.54,2.20,-.35]],glass);
+		poly([[-.54,2.20,.12],[.54,2.20,.12],[.62,1.68,.78],[-.62,1.68,.78]],glass);
+		for(const s of [-1,1]){
+			poly([[s*.735,1.68,-.82],[s*.575,2.18,-.29],[s*.58,2.18,.05],[s*.70,1.68,.67]],glass);
+			// Side skirts, mirrors, door handles and wheel arches.
+			const skirt=new THREE.Mesh(new THREE.BoxGeometry(.12,.22,2.35),dark);skirt.position.set(s*.91,.42,.02);car.add(skirt);
+			const mirror=new THREE.Mesh(new THREE.SphereGeometry(.19,12,8),paint);mirror.scale.set(1,.62,.75);mirror.position.set(s*1.02,1.48,-.72);car.add(mirror);
+			const handle=new THREE.Mesh(new THREE.BoxGeometry(.035,.045,.28),chrome);handle.position.set(s*1.025,1.02,.35);car.add(handle);
+			for(const z of [-1.48,1.42]){
+				const wheel=new THREE.Group();wheel.position.set(s*.91,.48,z);car.add(wheel);
+				const tire=new THREE.Mesh(new THREE.TorusGeometry(.43,.17,12,24),rubber);tire.rotation.y=Math.PI/2;tire.castShadow=true;wheel.add(tire);
+				const rim=new THREE.Mesh(new THREE.CylinderGeometry(.29,.29,.12,16),chrome);rim.rotation.z=Math.PI/2;wheel.add(rim);
+				const hub=new THREE.Mesh(new THREE.CylinderGeometry(.105,.105,.15,12),dark);hub.rotation.z=Math.PI/2;wheel.add(hub);
+				for(let k=0;k<5;k++){const spoke=new THREE.Mesh(new THREE.BoxGeometry(.055,.34,.055),chrome);spoke.position.y=Math.cos(k*Math.PI*2/5)*.16;spoke.position.z=Math.sin(k*Math.PI*2/5)*.16;spoke.rotation.x=k*Math.PI*2/5;wheel.add(spoke)}
+			}
+		}
+		// Headlights, brake lamps, front grille, diffuser and rear wing.
+		for(const s of [-1,1]){
+			const head=new THREE.Mesh(new THREE.BoxGeometry(.43,.13,.13),lamp);head.position.set(s*.65,.83,-2.12);car.add(head);
+			const tail=new THREE.Mesh(new THREE.BoxGeometry(.46,.13,.12),tailLamp);tail.position.set(s*.65,.86,2.19);car.add(tail);
+			const exhaust=new THREE.Mesh(new THREE.CylinderGeometry(.09,.11,.24,12),chrome);exhaust.rotation.x=Math.PI/2;exhaust.position.set(s*.52,.42,2.28);car.add(exhaust);
+			const wingPost=new THREE.Mesh(new THREE.BoxGeometry(.07,.37,.09),dark);wingPost.position.set(s*.67,1.35,1.77);car.add(wingPost);
+		}
+		const grille=new THREE.Mesh(new THREE.BoxGeometry(1.05,.21,.08),dark);grille.position.set(0,.58,-2.35);car.add(grille);
+		const wing=new THREE.Mesh(new THREE.BoxGeometry(1.65,.12,.43),paint);wing.position.set(0,1.57,1.79);car.add(wing);
+		const diffuser=new THREE.Mesh(new THREE.BoxGeometry(1.42,.19,.28),dark);diffuser.position.set(0,.36,2.19);car.add(diffuser);
+
+		const state={x:A,y:0,z:0,heading:Math.PI/2,speed:0,lap:1,elapsed:0,started:false,lastT:0};
+		// Place the car on the start straight, facing down the circuit.
+		state.x=A;state.z=-4;state.heading=Math.PI/2;
+		const keys={};
+		addEventListener('keydown',e=>{keys[e.code]=true;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();if(e.code==='KeyR')reset()},{passive:false});
+		addEventListener('keyup',e=>keys[e.code]=false);
+		const speedEl=document.getElementById('speed'),timerEl=document.getElementById('timer'),lapEl=document.getElementById('lap'),intro=document.getElementById('intro');
+		function reset(){state.x=A;state.z=-4;state.heading=Math.PI/2;state.speed=0;state.elapsed=0;state.lap=1;state.lastT=0;state.started=false;intro.classList.remove('hide')}
+		function onRoad(x,z){const t=Math.atan2(z/B,x/A),c=centerAt(t),n=normalAt(t),offset=(x-c.x)*n.x+(z-c.z)*n.z;return Math.abs(offset)<ROAD*.5+.8}
+		const clock=new THREE.Clock();
+		const desiredCam=new THREE.Vector3(),lookAt=new THREE.Vector3();
+		function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);
+			const gas=keys.KeyW||keys.ArrowUp, reverse=keys.KeyS||keys.ArrowDown, brake=keys.Space, steer=(keys.KeyD||keys.ArrowRight?1:0)-(keys.KeyA||keys.ArrowLeft?1:0);
+			if(gas||reverse||brake||steer){state.started=true;intro.classList.add('hide')}
+			const road=onRoad(state.x,state.z), max=road?67:27;
+			if(gas)state.speed=Math.min(max,state.speed+27*dt);
+			if(reverse)state.speed=Math.max(-13,state.speed-20*dt);
+			if(brake)state.speed*=Math.max(0,1-3.8*dt);
+			if(!gas&&!reverse)state.speed*=Math.max(0,1-(road?0.48:1.25)*dt);
+			const speedFactor=Math.min(1,Math.abs(state.speed)/9);
+			state.heading-=steer*speedFactor*(road?1.08:.62)*dt*Math.sign(state.speed||1);
+			state.x+=-Math.sin(state.heading)*state.speed*dt;
+			state.z+=-Math.cos(state.heading)*state.speed*dt;
+			car.position.set(state.x,.02,state.z);car.rotation.y=state.heading;
+			// Detect a completed lap from the car crossing the start line.
+			const t=(Math.atan2(state.z/B,state.x/A)+Math.PI*2)%(Math.PI*2);
+			if(state.started&&state.lastT>5.7&&t<.55){state.lap++;lapEl.textContent=String(state.lap).padStart(2,'0')}
+			state.lastT=t;if(state.started)state.elapsed+=dt;
+			speedEl.textContent=String(Math.round(Math.abs(state.speed)*3.6)).padStart(3,'0');
+			const mins=Math.floor(state.elapsed/60),secs=(state.elapsed%60).toFixed(1).padStart(4,'0');timerEl.textContent=`${String(mins).padStart(2,'0')}:${secs}`;
+			desiredCam.set(state.x+Math.sin(state.heading)*10,6.1,state.z+Math.cos(state.heading)*10);
+			camera.position.lerp(desiredCam,1-Math.exp(-4.3*dt));
+			lookAt.set(state.x-Math.sin(state.heading)*4,1.25,state.z-Math.cos(state.heading)*4);camera.lookAt(lookAt);
+			renderer.render(scene,camera);
+		}
+		animate();
+		addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+	</script>
+</body>
+</html>
