@@ -1,6 +1,6 @@
 # APEX Racing
 
-Ein browserbasiertes 3D-Autorennen mit Sportwagen, Rundkurs und Multiplayer-Räumen.
+Ein browserbasiertes 3D-Grand-Prix-Rennen mit modelliertem Sportwagen, abwechslungsreicher Rennstrecke, Startampel und Multiplayer-Räumen.
 
 ## Starten
 
@@ -17,6 +17,6 @@ Danach `http://localhost:8000` im Browser öffnen. Für 3D und Multiplayer ist e
 1. Einen Namen eingeben und **Raum erstellen** wählen.
 2. Den sechsstelligen Raumcode mit den Mitfahrern teilen.
 3. Die anderen öffnen dieselbe Seite, geben den Code ein und wählen **Beitreten**.
-4. Der Ersteller startet das Rennen. Bis zu acht Fahrer können teilnehmen.
+4. Der Ersteller wählt 3, 5 oder 10 Runden und startet das Rennen. Nach der Startampel fahren alle gleichzeitig; bis zu acht Fahrer können teilnehmen.
 
-Die Mitspieler verbinden sich über PeerJS und den öffentlichen PeerServer. Das Rennen läuft direkt in den Browsern; der Raum-Ersteller verteilt die Fahrzeugpositionen. Fürs Fahren: **↑** Gas, **↓** Bremse, **← / →** lenken, **R** zurücksetzen.
+Die Mitspieler verbinden sich über PeerJS und den öffentlichen PeerServer. Das Rennen läuft direkt in den Browsern; der Raum-Ersteller verteilt die Fahrzeugpositionen. **↑** gibt Gas, **↓** bremst und **← / →** lenken. Bei einem Aufprall auf die Leitplanke verliert der Wagen Tempo, prallt ab und nimmt sichtbaren Schaden. **R** setzt ihn zurück.
