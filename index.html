@@ -17,7 +17,7 @@
 		<div class="top"><div class="brand">APEX <em>RACING</em></div><div class="pill" id="room-badge">MULTIPLAYER · READY</div></div>
 		<div class="stats">
 			<div class="card"><div class="label">GESCHWINDIGKEIT</div><div class="value"><span id="speed">000</span> <span class="unit">KM/H</span></div></div>
-			<div class="card"><div class="label">RUNDE</div><div class="value lap-value" id="lap">01 / 03</div></div>
+			<div class="card"><div class="label">RUNDE</div><div class="value lap-value" id="lap">0/3</div></div>
 			<div class="card"><div class="label">ZEIT</div><div class="value" id="timer">00:00.0</div></div>
 			<div class="card"><div class="label">SCHADEN</div><div class="damage-track"><div class="damage-fill" id="damage-fill"></div></div></div>
 		</div>
@@ -241,7 +241,9 @@
 		const diffuser=new THREE.Mesh(new THREE.BoxGeometry(1.5,.19,.28),dark);diffuser.position.set(0,.36,2.19);car.add(diffuser);
 
 		let initialGrid=gridPosition();
-		const state={x:initialGrid.x,y:0,z:initialGrid.z,heading:trackAngleAt(0)-Math.PI,speed:0,lateralSpeed:0,lap:1,completedLaps:0,previousX:initialGrid.x,previousZ:initialGrid.z,elapsed:0,damage:0,impactYaw:0,impactCooldown:0,eliminated:false,finished:false};
+		const resetT=TAU*.01,resetCenter=centerAt(resetT);
+		let resetPosition={x:resetCenter.x,z:resetCenter.z,heading:trackAngleAt(resetT)-Math.PI};
+		const state={x:initialGrid.x,y:0,z:initialGrid.z,heading:trackAngleAt(0)-Math.PI,speed:0,lateralSpeed:0,lap:0,completedLaps:0,previousX:initialGrid.x,previousZ:initialGrid.z,elapsed:0,damage:0,impactYaw:0,impactCooldown:0,eliminated:false,finished:false};
 		const keys={};
 		const speedEl=document.getElementById('speed'),timerEl=document.getElementById('timer'),lapEl=document.getElementById('lap'),intro=document.getElementById('intro');
 		const lobby=document.getElementById('lobby'),statusEl=document.getElementById('connection-status'),roomCard=document.getElementById('room-card'),setupActions=document.getElementById('setup-actions'),trackSettings=document.getElementById('track-settings');
@@ -254,7 +256,6 @@
 		const setStatus=message=>{statusEl.textContent=message};
 		const randomCode=()=>Math.random().toString(36).slice(2,8).toUpperCase().padEnd(6,'0');
 		const playerColor=id=>peerColors[[...String(id)].reduce((sum,char)=>sum+char.charCodeAt(0),0)%peerColors.length];
-		const formatLap=lap=>lap<0?`-${String(-lap).padStart(2,'0')}`:String(lap).padStart(2,'0');
 		function ownSnapshot(){return{id:playerId,name:localName(),color:0x116fe0,x:state.x,z:state.z,heading:state.heading,speed:state.speed,lateralSpeed:state.lateralSpeed,lap:state.lap,progress:state.completedLaps,eliminated:state.eliminated,finished:state.finished}}
 		function validSnapshot(player){return player&&typeof player.id==='string'&&typeof player.name==='string'&&[player.x,player.z,player.heading,player.speed,player.lap,player.progress].every(Number.isFinite)}
 		function applyTrack(trackId,notifyPeers=false,spawn=null){
@@ -263,13 +264,14 @@
 			rebuildTrack(trackId);trackSelect.value=trackId;initialGrid=gridPosition();spawnPosition=spawn&&Number.isFinite(spawn.x)&&Number.isFinite(spawn.z)?{x:spawn.x,z:spawn.z}:{...initialGrid};
 			state.x=spawnPosition.x;state.z=spawnPosition.z;state.previousX=state.x;state.previousZ=state.z;state.eliminated=false;state.finished=false;
 			state.heading=spawn&&Number.isFinite(spawn.heading)?spawn.heading:trackAngleAt(0)-Math.PI;
-			state.speed=0;state.lateralSpeed=0;state.impactYaw=0;state.damage=0;state.lap=1;state.completedLaps=0;state.elapsed=0;
-			lapEl.textContent=`01 / ${String(targetLaps).padStart(2,'0')}`;damageFill.style.width='0%';
+			const resetCenter=centerAt(resetT);resetPosition={x:resetCenter.x,z:resetCenter.z,heading:trackAngleAt(resetT)-Math.PI};
+			state.speed=0;state.lateralSpeed=0;state.impactYaw=0;state.damage=0;state.lap=0;state.completedLaps=0;state.elapsed=0;
+			lapEl.textContent=`0/${targetLaps}`;damageFill.style.width='0%';
 			setStatus(`Strecke: ${circuits[trackId].name}`);
 			if(notifyPeers&&roomRole==='host'){
 				for(const[id,connection]of connections){
 					const slot=[...players.keys()].indexOf(id)+1,grid=gridPosition(slot);
-					const player=players.get(id);if(player){player.snapshot={...grid,heading:trackAngleAt(0)-Math.PI,speed:0,lateralSpeed:0,lap:1,progress:0,eliminated:false,finished:false};player.previousSnapshot=player.snapshot}
+					const player=players.get(id);if(player){player.snapshot={...grid,heading:trackAngleAt(0)-Math.PI,speed:0,lateralSpeed:0,lap:0,progress:0,eliminated:false,finished:false};player.previousSnapshot=player.snapshot}
 					connection.send({type:'track',trackId,spawn:{...grid,heading:trackAngleAt(0)-Math.PI},players:currentPlayers()});
 				}
 				renderPlayers(currentPlayers());broadcastState();
@@ -315,7 +317,7 @@
 			for(const[index,driver]of standings.slice(0,8).entries()){
 				const row=document.createElement('div');row.className='leader-row'+(driver.id===playerId?' you':'');
 				const name=document.createElement('span');name.textContent=`${index+1}. ${driver.name}`;
-				const lap=document.createElement('span');lap.textContent=driver.eliminated?'RAUS':`${formatLap(driver.lap)}/${String(targetLaps).padStart(2,'0')}`;
+				const lap=document.createElement('span');lap.textContent=driver.eliminated?'RAUS':`${driver.lap}/${targetLaps}`;
 				row.append(name,lap);leaderRows.append(row);
 			}
 		}
@@ -373,10 +375,10 @@
 		}
 		function beginRace(startAt=Date.now()+5000,laps=targetLaps){
 			targetLaps=[3,5,10].includes(Number(laps))?Number(laps):3;
-			raceActive=true;trackSelect.disabled=true;state.elapsed=0;state.lap=1;state.completedLaps=0;state.eliminated=false;state.finished=false;state.damage=0;state.speed=0;state.lateralSpeed=0;state.impactYaw=0;
-			for(const player of players.values()){player.snapshot={...player.snapshot,speed:0,lateralSpeed:0,lap:1,progress:0,eliminated:false,finished:false};player.previousSnapshot=player.snapshot}
+			raceActive=true;trackSelect.disabled=true;state.elapsed=0;state.lap=0;state.completedLaps=0;state.eliminated=false;state.finished=false;state.damage=0;state.speed=0;state.lateralSpeed=0;state.impactYaw=0;
+			for(const player of players.values()){player.snapshot={...player.snapshot,speed:0,lateralSpeed:0,lap:0,progress:0,eliminated:false,finished:false};player.previousSnapshot=player.snapshot}
 			state.previousX=state.x;state.previousZ=state.z;raceStartAt=startAt;cameraShake=0;
-			lapEl.textContent=`01 / ${String(targetLaps).padStart(2,'0')}`;damageFill.style.width='0%';
+			lapEl.textContent=`0/${targetLaps}`;damageFill.style.width='0%';
 			document.getElementById('finish-return').classList.add('hide');
 			raceOverlay.classList.remove('hide');raceCall.textContent='5';raceCaption.textContent='RENNSTART';startLights.forEach(light=>light.classList.remove('on'));
 			lobby.classList.add('hide');intro.classList.add('hide');updateLeaderboard();
@@ -391,7 +393,7 @@
 			for(const connection of connections.values())connection.close();
 			connections.clear();removeRemoteCars();
 			if(peer){peer.destroy();peer=null}
-			roomRole=null;roomCode='';playerId='host';raceActive=false;raceOverlay.classList.add('hide');trackSelect.disabled=false;trackSettings.classList.remove('hide');spawnPosition={...initialGrid};state.x=initialGrid.x;state.z=initialGrid.z;state.previousX=state.x;state.previousZ=state.z;state.heading=trackAngleAt(0)-Math.PI;state.speed=0;state.lateralSpeed=0;state.elapsed=0;state.lap=1;state.completedLaps=0;state.eliminated=false;state.finished=false;lapEl.textContent='01 / 03';targetLaps=3;
+			roomRole=null;roomCode='';playerId='host';raceActive=false;raceOverlay.classList.add('hide');trackSelect.disabled=false;trackSettings.classList.remove('hide');spawnPosition={...initialGrid};state.x=initialGrid.x;state.z=initialGrid.z;state.previousX=state.x;state.previousZ=state.z;state.heading=trackAngleAt(0)-Math.PI;state.speed=0;state.lateralSpeed=0;state.elapsed=0;state.lap=0;state.completedLaps=0;state.eliminated=false;state.finished=false;lapEl.textContent='0/3';targetLaps=3;
 			setupActions.classList.remove('hide');roomCard.classList.add('hide');roomBadge.textContent='MULTIPLAYER · READY';startButton.disabled=false;document.getElementById('lap-settings').classList.remove('hide');lobby.classList.remove('hide');intro.classList.add('hide');
 			setStatus('Pfeiltasten zum Lenken · ↑ Gas · ↓ Bremse');
 		}
@@ -414,7 +416,7 @@
 					if(message.type==='join'&&typeof message.name==='string'){
 						if(!players.has(connection.peer)&&players.size>=7){connection.send({type:'full'});connection.close();return}
 						const name=message.name.trim().slice(0,16)||'Racer';
-						const slot=players.size+1,spawn=gridPosition(slot),startState={...spawn,heading:trackAngleAt(0)-Math.PI,speed:0,lateralSpeed:0,lap:1,progress:0,eliminated:false,finished:false};
+						const slot=players.size+1,spawn=gridPosition(slot),startState={...spawn,heading:trackAngleAt(0)-Math.PI,speed:0,lateralSpeed:0,lap:0,progress:0,eliminated:false,finished:false};
 						players.set(connection.peer,{id:connection.peer,name,snapshot:startState});
 						connections.set(connection.peer,connection);
 						renderPlayers(currentPlayers());
@@ -477,7 +479,12 @@
 		document.getElementById('start-race').addEventListener('click',()=>{if(roomRole==='host'){const startAt=Date.now()+5000,laps=Number(document.getElementById('lap-count').value);beginRace(startAt,laps);sendToRoom({type:'start',startAt,laps,trackId:activeTrackId})}});
 		document.getElementById('leave-room').addEventListener('click',leaveRoom);
 		document.getElementById('finish-return').addEventListener('click',leaveRoom);
-		addEventListener('keydown',event=>{keys[event.code]=true;if(raceActive&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(event.code))event.preventDefault();if(event.code==='KeyR'&&raceActive){state.x=spawnPosition.x;state.z=spawnPosition.z;state.previousX=state.x;state.previousZ=state.z;state.heading=trackAngleAt(0)-Math.PI;state.speed=0;state.lateralSpeed=0;state.impactYaw=0;state.damage=0;state.lap=state.completedLaps+1;lapEl.textContent=`${formatLap(state.lap)} / ${String(targetLaps).padStart(2,'0')}`}},{passive:false});
+		function resetCar(){
+			if(!raceActive||state.eliminated||state.finished)return;
+			state.x=resetPosition.x;state.z=resetPosition.z;state.previousX=state.x;state.previousZ=state.z;
+			state.heading=resetPosition.heading;state.speed=0;state.lateralSpeed=0;state.impactYaw=0;state.damage=0;
+		}
+		addEventListener('keydown',event=>{keys[event.code]=true;if(raceActive&&['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(event.code))event.preventDefault();if(event.code==='KeyR')resetCar()},{passive:false});
 		addEventListener('keyup',event=>keys[event.code]=false);
 		addEventListener('blur',()=>{for(const key of Object.keys(keys))keys[key]=false});
 		const clock=new THREE.Clock();
@@ -528,8 +535,8 @@
 		function updateRaceProgress(previousX,previousZ){
 			const direction=crossedFinishLine(previousX,previousZ,state.x,state.z);
 			if(!direction)return;
-			state.completedLaps+=direction;state.lap=state.completedLaps+1;
-			lapEl.textContent=`${formatLap(state.lap)} / ${String(targetLaps).padStart(2,'0')}`;updateLeaderboard();
+			state.completedLaps+=direction;state.lap=state.completedLaps;
+			lapEl.textContent=`${state.lap}/${targetLaps}`;updateLeaderboard();
 			if(state.completedLaps>=targetLaps){
 				raceActive=false;state.finished=true;state.speed=0;state.lateralSpeed=0;raceOverlay.classList.remove('hide');raceCall.textContent='ZIEL!';raceCaption.textContent=`${targetLaps} RUNDEN · ${timerEl.textContent}`;document.getElementById('finish-return').classList.remove('hide');
 			}
