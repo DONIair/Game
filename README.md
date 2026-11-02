@@ -21,4 +21,4 @@ Danach `http://localhost:8000` im Browser öffnen. Für 3D und Multiplayer ist e
 
 Die Mitspieler verbinden sich über PeerJS und den öffentlichen PeerServer. Das Rennen läuft direkt in den Browsern; der Raum-Ersteller verteilt die Fahrzeugpositionen und die gewählte Strecke. **↑** gibt Gas, **↓** bremst und **← / →** lenken. Bei einem Aufprall auf die Leitplanke verliert der Wagen Tempo, prallt ab und nimmt sichtbaren Schaden. **R** setzt ihn zurück.
 
-Runden zählen nur, wenn alle Checkpoints in der richtigen Reihenfolge und vorwärts durchfahren wurden. Die Erkennung interpoliert die Bewegung zwischen Frames und hängt nicht von einer Mindestgeschwindigkeit ab; Rückwärtsfahren über Start/Ziel oder das Auslassen von Streckenabschnitten zählt daher keine Runde.
+Jede Vorwärtsüberquerung der Start-/Ziellinie zählt eine Runde; eine Rückwärtsüberquerung zieht eine Runde ab. Checkpoints gibt es nicht. Im Multiplayer erkennt der Rennleiter Zusammenstöße: Das langsamere Auto scheidet aus dem Rennen aus.
