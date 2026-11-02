@@ -88,13 +88,13 @@
 		const sun = new THREE.DirectionalLight(0xfff0d7, 3.1);
 		sun.position.set(-55, 85, 40); sun.castShadow = true;
 		sun.shadow.mapSize.set(2048,2048);
-		sun.shadow.camera.left=-115; sun.shadow.camera.right=115; sun.shadow.camera.top=115; sun.shadow.camera.bottom=-115;
+		sun.shadow.camera.left=-1450; sun.shadow.camera.right=1450; sun.shadow.camera.top=1450; sun.shadow.camera.bottom=-1450;
 		sun.shadow.bias=-.00015; scene.add(sun);
 
 		const mat=(color,roughness=.8,metalness=0)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
-		const grassMat=mat(0x526d3e), asphaltMat=mat(0x34383a,.96), curbRed=mat(0xd94e3d), curbWhite=mat(0xe9e5d9), lineMat=mat(0xe9e8d7), railMat=mat(0x9da6a6,.35,.72);
-		const ground=new THREE.Mesh(new THREE.PlaneGeometry(900,900),grassMat); ground.rotation.x=-Math.PI/2; ground.position.y=-.12; ground.receiveShadow=true; scene.add(ground);
-		const ROAD=16,STEPS=420,TAU=Math.PI*2,CHECKPOINT_COUNT=8;
+		const grassMat=mat(0x526d3e), asphaltMat=mat(0x34383a,.96), lineMat=mat(0xe9e8d7), railMat=mat(0x9da6a6,.35,.72);
+		const ground=new THREE.Mesh(new THREE.PlaneGeometry(3000,3000),grassMat); ground.rotation.x=-Math.PI/2; ground.position.y=-.12; ground.receiveShadow=true; scene.add(ground);
+		const ROAD=16,STEPS=2400,TAU=Math.PI*2,CHECKPOINT_COUNT=8,TRACK_SCALE=12;
 		const circuits={
 			club:{name:'Club-Rundkurs',points:[[-55,0],[-40,-14],[-14,-17],[14,-16],[38,-10],[51,-1],[47,10],[34,16],[19,12],[8,5],[-5,5],[-16,14],[-34,17],[-49,11]]},
 			athletics:{name:'Leichtathletik-Oval',points:[[-72,0],[-66,-12],[-48,-17],[-20,-18],[20,-18],[48,-17],[66,-12],[72,0],[66,12],[48,17],[20,18],[-20,18],[-48,17],[-66,12]]},
@@ -105,7 +105,7 @@
 		let activeTrackId='alpine',circuit=null,trackSamples=[];
 		const trackGroup=new THREE.Group();scene.add(trackGroup);
 		const trunkMat=mat(0x554634),leafMats=[mat(0x294a32),mat(0x36583a),mat(0x476542)];
-		const buildingMat=mat(0x555d5d),roofMat=mat(0x262e30,.55,.25),seatMats=[mat(0x314d60),mat(0xc2c5bd)];
+		const curbMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.86});
 		const startMats=[mat(0xf6f5ea),mat(0x202426)];
 		function centerAt(t){return circuit.getPointAt((t/TAU+1)%1)}
 		function tangentAt(t){return circuit.getTangentAt((t/TAU+1)%1)}
@@ -130,6 +130,25 @@
 			for(let i=0;i<segments;i++){const a=i*2,b=a+1,c=a+2,d=a+3;indices.push(a,c,b,b,c,d)}
 			const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
 		}
+		function curbGeometry(segments){
+			const positions=[],colors=[],indices=[];
+			for(const side of [-1,1]){
+				for(let i=0;i<segments;i++){
+					const current=centerAt(i/segments*TAU),currentNormal=normalAt(i/segments*TAU);
+					const next=centerAt((i+1)/segments*TAU),nextNormal=normalAt((i+1)/segments*TAU);
+					const base=positions.length/3,outerOffset=side*(ROAD/2+1.25),innerOffset=side*ROAD/2;
+					for(const [center,normal,offset] of [[current,currentNormal,innerOffset],[current,currentNormal,outerOffset],[next,nextNormal,innerOffset],[next,nextNormal,outerOffset]])positions.push(center.x+normal.x*offset,.08,center.z+normal.z*offset);
+					const hex=i%2?0xd94e3d:0xe9e5d9,color=new THREE.Color(hex);
+					for(let vertex=0;vertex<4;vertex++)colors.push(color.r,color.g,color.b);
+					if(side<0)indices.push(base,base+1,base+2,base+1,base+3,base+2);
+					else indices.push(base,base+2,base+1,base+1,base+2,base+3);
+				}
+			}
+			const geometry=new THREE.BufferGeometry();
+			geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+			geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+			geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
+		}
 		function rebuildTrack(trackId){
 			const definition=circuits[trackId];
 			if(!definition)throw new Error(`Unbekannte Rennstrecke: ${trackId}`);
@@ -138,35 +157,29 @@
 				child.traverse(object=>object.geometry?.dispose());
 			}
 			activeTrackId=trackId;
-			circuit=new THREE.CatmullRomCurve3(definition.points.map(([x,z])=>new THREE.Vector3(x,0,z)),true,'catmullrom',.35);
+			circuit=new THREE.CatmullRomCurve3(definition.points.map(([x,z])=>new THREE.Vector3(x*TRACK_SCALE,0,z*TRACK_SCALE)),true,'centripetal');
 			trackSamples=Array.from({length:STEPS},(_,i)=>{const t=i/STEPS*TAU,c=centerAt(t),n=normalAt(t);return{x:c.x,z:c.z,nx:n.x,nz:n.z,t}});
 			const road=new THREE.Mesh(ribbonGeometry(-ROAD/2,ROAD/2),asphaltMat);road.receiveShadow=true;trackGroup.add(road);
+			const curbSegments=Math.ceil(circuit.getLength()/2.2),curbs=new THREE.Mesh(curbGeometry(curbSegments),curbMat);curbs.receiveShadow=true;trackGroup.add(curbs);
 			for(const side of [-1,1]){
-				const curb=new THREE.Mesh(ribbonGeometry(side===-1?-ROAD/2-1.25:-ROAD/2,side===-1?-ROAD/2:ROAD/2+1.25),curbWhite);curb.visible=false;trackGroup.add(curb);
-				for(let i=0;i<200;i++){
-					const t=i/200*TAU,c=centerAt(t),n=normalAt(t),off=side*(ROAD/2+.63);
-					const block=new THREE.Mesh(new THREE.BoxGeometry(1.02,.16,1.25),i%2?curbRed:curbWhite);
-					block.position.set(c.x+n.x*off,.09,c.z+n.z*off);block.rotation.y=trackAngleAt(t);block.receiveShadow=true;trackGroup.add(block);
-				}
 				const railPoints=[];
-				for(let i=0;i<=480;i++){const t=i/480*TAU,c=centerAt(t),n=normalAt(t),offset=side*(ROAD/2+2.6);railPoints.push(new THREE.Vector3(c.x+n.x*offset,.8,c.z+n.z*offset))}
-				const rail=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPoints),900,.16,8,false),railMat);rail.castShadow=true;trackGroup.add(rail);
+				for(let i=0;i<480;i++){const t=i/480*TAU,c=centerAt(t),n=normalAt(t),offset=side*(ROAD/2+2.6);railPoints.push(new THREE.Vector3(c.x+n.x*offset,.8,c.z+n.z*offset))}
+				const railCurve=new THREE.CatmullRomCurve3(railPoints,true,'centripetal');
+				const rail=new THREE.Mesh(new THREE.TubeGeometry(railCurve,Math.ceil(circuit.getLength()*3),.16,8,true),railMat);rail.castShadow=true;trackGroup.add(rail);
 			}
-			for(let i=0;i<84;i++){const t=(i+.5)/84*TAU,c=centerAt(t),dash=new THREE.Mesh(new THREE.BoxGeometry(.16,.025,1.65),lineMat);dash.position.set(c.x,.035,c.z);dash.rotation.y=trackAngleAt(t);trackGroup.add(dash)}
+			const dashCount=Math.floor(circuit.getLength()/18);
+			for(let i=0;i<dashCount;i++){const t=(i+.5)/dashCount*TAU,c=centerAt(t),dash=new THREE.Mesh(new THREE.BoxGeometry(.16,.025,1.65),lineMat);dash.position.set(c.x,.035,c.z);dash.rotation.y=trackAngleAt(t);trackGroup.add(dash)}
 			const start=new THREE.Group();
 			for(let i=0;i<12;i++){const tile=new THREE.Mesh(new THREE.BoxGeometry(1.32,.035,.68),startMats[(i+Math.floor(i/2))%2]);tile.position.set(-5.4+i*.98,.045,0);start.add(tile)}
 			start.rotation.y=trackAngleAt(0);start.position.copy(centerAt(0));trackGroup.add(start);
 			let seed=9317+Object.keys(circuits).indexOf(trackId)*7919;
 			const rand=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296};
-			for(let i=0;i<110;i++){
-				const x=(rand()-.5)*270,z=(rand()-.5)*180;if(trackProjection(x,z).distance<ROAD/2+7)continue;
+			for(let i=0;i<360;i++){
+				const t=rand()*TAU,c=centerAt(t),n=normalAt(t),side=rand()<.5?-1:1,offset=ROAD/2+12+rand()*65;
+				const x=c.x+n.x*side*offset,z=c.z+n.z*side*offset;if(trackProjection(x,z).distance<ROAD/2+7)continue;
 				const h=2.4+rand()*3.2,tree=new THREE.Group(),trunk=new THREE.Mesh(new THREE.CylinderGeometry(.16,.26,h*.48,7),trunkMat),crown=new THREE.Mesh(new THREE.ConeGeometry(1.05+rand()*.45,h*.78,7),leafMats[i%3]);
 				trunk.position.y=h*.24;crown.position.y=h*.75;crown.castShadow=true;tree.add(trunk,crown);tree.position.set(x,0,z);tree.scale.setScalar(.78+rand()*.62);trackGroup.add(tree);
 			}
-			const pit=new THREE.Group(),building=new THREE.Mesh(new THREE.BoxGeometry(28,5,8),buildingMat),roof=new THREE.Mesh(new THREE.BoxGeometry(29,.55,9),roofMat);
-			building.position.y=2.5;building.castShadow=true;roof.position.y=5.25;pit.add(building,roof);
-			for(let i=0;i<18;i++){const seat=new THREE.Mesh(new THREE.BoxGeometry(1.3,.35,4.2),seatMats[i%2]);seat.position.set(-14+i*1.6,1.2,7);seat.rotation.x=-.12;pit.add(seat)}
-			const startCenter=centerAt(0),startNormal=normalAt(0);pit.position.set(startCenter.x+startNormal.x*(ROAD/2+17),0,startCenter.z+startNormal.z*(ROAD/2+17));pit.rotation.y=trackAngleAt(0);trackGroup.add(pit);
 		}
 		rebuildTrack(activeTrackId);
 
@@ -453,18 +466,20 @@
 			const t=index/CHECKPOINT_COUNT*TAU,center=centerAt(t),tangent=tangentAt(t),normal=normalAt(t);
 			const before=(previousX-center.x)*tangent.x+(previousZ-center.z)*tangent.z;
 			const after=(x-center.x)*tangent.x+(z-center.z)*tangent.z;
-			if(before>=0||after<0)return false;
+			if(before>0||after<=0)return false;
 			const fraction=before/(before-after),crossX=previousX+(x-previousX)*fraction,crossZ=previousZ+(z-previousZ)*fraction;
 			const lateral=(crossX-center.x)*normal.x+(crossZ-center.z)*normal.z;
 			return Math.abs(lateral)<=ROAD/2-1;
 		}
 		function updateRaceProgress(previousX,previousZ){
-			if(!crossedCheckpoint(previousX,previousZ,state.x,state.z,state.nextCheckpoint))return;
-			if(state.nextCheckpoint<CHECKPOINT_COUNT){state.nextCheckpoint++;return}
-			state.completedLaps++;state.nextCheckpoint=1;state.lap=Math.min(targetLaps,state.completedLaps+1);
-			lapEl.textContent=`${String(state.lap).padStart(2,'0')} / ${String(targetLaps).padStart(2,'0')}`;updateLeaderboard();
-			if(state.completedLaps>=targetLaps){
-				raceActive=false;state.speed=0;state.lateralSpeed=0;raceOverlay.classList.remove('hide');raceCall.textContent='ZIEL!';raceCaption.textContent=`${targetLaps} RUNDEN · ${timerEl.textContent}`;document.getElementById('finish-return').classList.remove('hide');
+			while(crossedCheckpoint(previousX,previousZ,state.x,state.z,state.nextCheckpoint)){
+				if(state.nextCheckpoint<CHECKPOINT_COUNT){state.nextCheckpoint++;continue}
+				state.completedLaps++;state.nextCheckpoint=1;state.lap=Math.min(targetLaps,state.completedLaps+1);
+				lapEl.textContent=`${String(state.lap).padStart(2,'0')} / ${String(targetLaps).padStart(2,'0')}`;updateLeaderboard();
+				if(state.completedLaps>=targetLaps){
+					raceActive=false;state.speed=0;state.lateralSpeed=0;raceOverlay.classList.remove('hide');raceCall.textContent='ZIEL!';raceCaption.textContent=`${targetLaps} RUNDEN · ${timerEl.textContent}`;document.getElementById('finish-return').classList.remove('hide');
+				}
+				break;
 			}
 		}
 		function animate(){requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.04);
